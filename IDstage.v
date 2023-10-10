@@ -2,63 +2,47 @@ module IDstage (
   input wire clk,
   input wire resetn,
   input wire reset,
+  input wire [31:0] inst,
+  output wire br_taken,
+  output wire [31:0] br_target,
   
+  output wire [31:0] alu_src1,
+  output wire [31:0] alu_src2,
+  output wire [11:0] alu_op,
+  output wire [31:0] rkd_value,
+  output wire [31:0] res_from_mem,
+  output wire gr_we,
+  output wire [4:0] dest,
+  output wire mem_we,
   
+  input wire rf_we,
+  input wire [4:0] rf_waddr,
+  input wire [31:0] rf_wdata,
+  
+  input wire [31:0] fs_pc,
   input wire fs_valid,
+  output reg [31:0] ds_pc,
   output reg ds_valid,
+  
+  
   input wire es_allowin,
   output wire ds_allowin,
   input wire fs2ds_valid,
   output wire ds2es_valid,
-
-  
-  output wire [32:0] br_zip,
-//  output wire br_taken,
-//  output wire [31:0] br_target,
   
   
-  output wire [178:0] ds2es_bus,
-//  output reg [31:0] ds_pc,
-//  output wire [31:0] alu_src1,
-//  output wire [31:0] alu_src2,
-//  output wire [11:0] alu_op,
-//  output wire [31:0] rkd_value,
-//  output wire [31:0] res_from_mem,
-//  output wire gr_we,
-//  output wire [4:0] dest,
-//  output wire mem_we,
+  input wire es_valid,
+  input wire ms_valid,
+  input wire ws_valid,
+  input wire exe_gr_we,
+  input wire mem_gr_we,
+  input wire gr_we_reg,
+  input wire [4:0] exe_dest,
+  input wire [4:0] mem_dest,
+  input wire [4:0] dest_reg,
   
-  input [37:0] ws2ds_bus,
-//  input wire rf_we,
-//  input wire [4:0] rf_waddr,
-//  input wire [31:0] rf_wdata,
-  
-  input wire [63:0] fs2ds_bus,
-//  input wire [31:0] fs_pc,
-//  input wire [31:0] inst,
-  
-  
-
-  
-  input [38:0] exe_forward,
-//  input wire es_valid,
-//  input wire exe_gr_we,
-//  input wire [4:0] exe_dest,
-//  input wire [31:0] alu_result,
-  
-  input [38:0] mem_forward,
-//  input wire ms_valid,
-//  input wire mem_gr_we,
-//  input wire [4:0] mem_dest,
-//  input wire [31:0] final_result,
-  
-  input [6:0] wb_forward,
-//  input wire ws_valid,
-//  input wire gr_we_reg,
-//  input wire [4:0] dest_reg,
-  
-
-
+  input wire [31:0] alu_result,
+  input wire [31:0] final_result,
   
   input wire es_inst_is_ld_w,
   output wire inst_ld_w
@@ -67,60 +51,26 @@ module IDstage (
 );
 
 
-//////////zip//////////
-
-
-
-wire [31:0] fs_pc;
-wire [31:0] inst;
-
-
-wire rf_we;
-wire [4:0] rf_waddr;
-wire [31:0] rf_wdata;
-
-reg [31:0] ds_pc;
-
-
-
-
-wire es_valid;
-wire exe_gr_we;
-wire [4:0] exe_dest;
-wire [31:0] alu_result;
-  
-wire ms_valid;
-wire mem_gr_we;
-wire [4:0] mem_dest;
-wire [31:0] final_result;
-  
-wire ws_valid;
-wire gr_we_reg;
-wire [4:0] dest_reg;
-
-assign {es_valid, exe_gr_we, exe_dest, alu_result} = exe_forward;
-assign {ms_valid, mem_gr_we, mem_dest, final_result} = mem_forward;
-assign {ws_valid, gr_we_reg, dest_reg, rf_wdata} = wb_forward;
 
 //////////declaration////////
 
 
 
- wire        br_taken;
- wire [31:0] br_target;
+// wire        br_taken;
+// wire [31:0] br_target;
 
- wire [11:0] alu_op;
+// wire [11:0] alu_op;
 wire load_op;
 wire src1_is_pc;
 wire src2_is_imm;
- wire        res_from_mem;
+// wire        res_from_mem;
 wire dst_is_r1;
- wire        gr_we;
- wire        mem_we;
+// wire        gr_we;
+// wire        mem_we;
 wire src_reg_is_rd;
- wire [4: 0] dest;
+// wire [4: 0] dest;
 wire [31:0] rj_value;
- wire [31:0] rkd_value;
+// wire [31:0] rkd_value;
 wire rj_eq_rd;
 wire [31:0] imm;
 wire [31:0] br_offs;
@@ -176,8 +126,8 @@ wire [31:0] rf_rdata1;
 wire [ 4:0] rf_raddr2;
 wire [31:0] rf_rdata2;
 
- wire [31:0] alu_src1   ;
- wire [31:0] alu_src2   ;
+// wire [31:0] alu_src1   ;
+// wire [31:0] alu_src2   ;
 // wire [31:0] alu_result ;
 
 reg [31:0] inst_reg;
@@ -352,26 +302,5 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (ds_pc + br_off
 
 assign alu_src1 = src1_is_pc  ? ds_pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
-
-
-
-
-
-
-
-////////////////////
-assign br_zip = {br_taken, br_target};
-assign {fs_pc, inst} = fs2ds_bus;
-assign {rf_we, rf_waddr, rf_wdata} = ws2ds_bus;
-assign ds2es_bus = {ds_pc, alu_src1, alu_src2, alu_op, rkd_value, res_from_mem, gr_we, dest, mem_we};
-
-
-
-
-
-
-
-
-
 
 endmodule

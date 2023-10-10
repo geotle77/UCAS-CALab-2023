@@ -34,49 +34,49 @@ always @(posedge clk) begin
     end
 end
 
-//wire br_taken;
-//wire [31:0] br_target;
-//wire [31:0] inst;
-//wire [31:0] fs_pc;
+wire br_taken;
+wire [31:0] br_target;
+wire [31:0] inst;
+wire [31:0] fs_pc;
 //wire if_valid;
 
-//wire [31:0] alu_src1;
-//wire [31:0] alu_src2;
-//wire [11:0] alu_op;
-//wire [31:0] rkd_value;
-//wire [31:0] res_from_mem;
-//wire gr_we;
-//wire [4:0] dest;
-//wire mem_we;
+wire [31:0] alu_src1;
+wire [31:0] alu_src2;
+wire [11:0] alu_op;
+wire [31:0] rkd_value;
+wire [31:0] res_from_mem;
+wire gr_we;
+wire [4:0] dest;
+wire mem_we;
 
-//wire rf_we;
-//wire [4:0] rf_waddr;
-//wire [31:0] rf_wdata;
+wire rf_we;
+wire [4:0] rf_waddr;
+wire [31:0] rf_wdata;
 
-//wire [31:0] ds_pc;
+wire [31:0] ds_pc;
 //wire id_valid;
 
-//wire [31:0] alu_result;
-//wire [31:0] exe_res_from_mem;
-//wire [4:0] exe_dest;
-//wire exe_gr_we;
+wire [31:0] alu_result;
+wire [31:0] exe_res_from_mem;
+wire [4:0] exe_dest;
+wire exe_gr_we;
 
-//wire [31:0] es_pc;
+wire [31:0] es_pc;
 //wire exe_valid;
 
-//wire mem_gr_we;
-//wire [4:0] mem_dest;
-//wire [31:0] mem_alu_result;
-//wire [31:0] mem_res_from_mem;
+wire mem_gr_we;
+wire [4:0] mem_dest;
+wire [31:0] mem_alu_result;
+wire [31:0] mem_res_from_mem;
 
-//wire [31:0] ms_pc;
+wire [31:0] ms_pc;
 //wire mem_valid;
 
-//wire [31:0] ws_pc;
+wire [31:0] ws_pc;
 //wire wb_valid;
 
 
-//wire [4:0] dest_reg;
+wire [4:0] dest_reg;
 
 
 //wire exe_ready_go;
@@ -117,29 +117,17 @@ wire ms_valid;
 wire ws_valid;
 
 
-//wire gr_we_reg;
+wire gr_we_reg;
 //wire [4:0] dest_reg;
 
 //wire [31:0] alu_result;
-//wire [31:0] final_result;
+wire [31:0] final_result;
 //wire [31:0] mem_result;
 
 
 wire es_inst_is_ld_w;
 wire inst_ld_w;
 
-
-
-
-wire [32:0] br_zip;
-wire [63:0] fs2ds_bus;
-wire [178:0] ds2es_bus;
-wire [101:0] es2ms_bus;
-wire [165:0] ms2ws_bus;
-wire [37:0] ws2ds_bus;
-wire [38:0] exe_forward;
-wire [38:0] mem_forward;
-wire [6:0] wb_forward;
 
 
 IFstage my_if (
@@ -151,8 +139,10 @@ IFstage my_if (
   .inst_sram_addr(inst_sram_addr),
   .inst_sram_wdata(inst_sram_wdata),
   .inst_sram_rdata(inst_sram_rdata),
-  .br_zip(br_zip),
-  .fs2ds_bus(fs2ds_bus),
+  .br_taken(br_taken),
+  .br_target(br_target),
+  .inst(inst),
+  .fs_pc(fs_pc),
   .fs_valid(fs_valid),
   //.if_allowin(if_allowin)
 //  .block(block)
@@ -164,25 +154,23 @@ IDstage my_id (
   .clk(clk),
   .resetn(resetn),
   .reset(reset),
-  //.inst(inst),
-  .br_zip(br_zip),
-  .ds2es_bus(ds2es_bus),
-//  .alu_src1(alu_src1),
-//  .alu_src2(alu_src2),
-//  .alu_op(alu_op),
-//  .rkd_value(rkd_value),
-//  .res_from_mem(res_from_mem),
-//  .gr_we(gr_we),
-//  .dest(dest),
-//  .mem_we(mem_we),
-  .ws2ds_bus(ws2ds_bus),
-//  .rf_we(rf_we),
-//  .rf_waddr(rf_waddr),
-//  .rf_wdata(rf_wdata),
-  //.fs_pc(fs_pc),
+  .inst(inst),
+  .br_taken(br_taken),
+  .br_target(br_target),
+  .alu_src1(alu_src1),
+  .alu_src2(alu_src2),
+  .alu_op(alu_op),
+  .rkd_value(rkd_value),
+  .res_from_mem(res_from_mem),
+  .gr_we(gr_we),
+  .dest(dest),
+  .mem_we(mem_we),
+  .rf_we(rf_we),
+  .rf_waddr(rf_waddr),
+  .rf_wdata(rf_wdata),
+  .fs_pc(fs_pc),
   .fs_valid(fs_valid),
-  .fs2ds_bus(fs2ds_bus),
-  //.ds_pc(ds_pc),
+  .ds_pc(ds_pc),
   .ds_valid(ds_valid),
   //.exe_gr_we(exe_gr_we),
   //.mem_gr_we(mem_gr_we),
@@ -202,20 +190,17 @@ IDstage my_id (
   .ds_allowin(ds_allowin),
   .fs2ds_valid(fs2ds_valid),
   .ds2es_valid(ds2es_valid),
-  .exe_forward(exe_forward),
-  .mem_forward(mem_forward),
-  .wb_forward(wb_forward),
-//  .es_valid(es_valid),
-//  .ms_valid(ms_valid),
-//  .ws_valid(ws_valid),
-//  .exe_gr_we(exe_gr_we),
-//  .mem_gr_we(mem_gr_we),
-//  .gr_we_reg(gr_we_reg),
-//  .exe_dest(exe_dest),
-//  .mem_dest(mem_dest),
-//  .dest_reg(dest_reg),
-//  .alu_result(alu_result),
-//  .final_result(final_result),
+  .es_valid(es_valid),
+  .ms_valid(ms_valid),
+  .ws_valid(ws_valid),
+  .exe_gr_we(exe_gr_we),
+  .mem_gr_we(mem_gr_we),
+  .gr_we_reg(gr_we_reg),
+  .exe_dest(exe_dest),
+  .mem_dest(mem_dest),
+  .dest_reg(dest_reg),
+  .alu_result(alu_result),
+  .final_result(final_result),
   .es_inst_is_ld_w(es_inst_is_ld_w),
   .inst_ld_w(inst_ld_w)
 
@@ -225,28 +210,26 @@ EXEstage my_exe (
   .clk(clk),
   .resetn(resetn),
   .reset(reset),
-  .ds2es_bus(ds2es_bus),
-//  .alu_src1(alu_src1),
-//  .alu_src2(alu_src2),
-//  .alu_op(alu_op),
-//  .rkd_value(rkd_value),
-//  .res_from_mem(res_from_mem),
-//  .gr_we(gr_we),
-//  .dest(dest),
-//  .mem_we(mem_we),
-  .es2ms_bus(es2ms_bus),
-//  .alu_result(alu_result),
-//  .exe_res_from_mem(exe_res_from_mem),
-//  .exe_dest(exe_dest),
-//  .exe_gr_we(exe_gr_we),
+  .alu_src1(alu_src1),
+  .alu_src2(alu_src2),
+  .alu_op(alu_op),
+  .rkd_value(rkd_value),
+  .res_from_mem(res_from_mem),
+  .gr_we(gr_we),
+  .dest(dest),
+  .mem_we(mem_we),
+  .alu_result(alu_result),
+  .exe_res_from_mem(exe_res_from_mem),
+  .exe_dest(exe_dest),
+  .exe_gr_we(exe_gr_we),
   .data_sram_en(data_sram_en),
   .data_sram_we(data_sram_we),
   .data_sram_addr(data_sram_addr),
   .data_sram_wdata(data_sram_wdata),
   .data_sram_rdata(data_sram_rdata),
-  //.ds_pc(ds_pc),
+  .ds_pc(ds_pc),
   .ds_valid(ds_valid),
-  //.es_pc(es_pc),
+  .es_pc(es_pc),
   .es_valid(es_valid),
   //.exe_ready_go(exe_ready_go)
   
@@ -258,28 +241,25 @@ EXEstage my_exe (
   .ds2es_valid(ds2es_valid),
   .es2ms_valid(es2ms_valid),
   .es_inst_is_ld_w(es_inst_is_ld_w),
-  .inst_ld_w(inst_ld_w),
-  .exe_forward(exe_forward)
+  .inst_ld_w(inst_ld_w)
 );
 
 MEMstage my_mem (
   .clk(clk),
   .resetn(resetn),
   .reset(reset),
-  .es2ms_bus(es2ms_bus),
-//  .alu_result(alu_result),
-//  .exe_res_from_mem(exe_res_from_mem),
-//  .exe_dest(exe_dest),
-//  .exe_gr_we(exe_gr_we),
-  .ms2ws_bus(ms2ws_bus),
-//  .data_sram_rdata(data_sram_rdata),
-//  .mem_gr_we(mem_gr_we),
-//  .mem_dest(mem_dest),
-//  .mem_alu_result(mem_alu_result),
-//  .mem_res_from_mem(mem_res_from_mem),
-  //.es_pc(es_pc),
+  .alu_result(alu_result),
+  .exe_res_from_mem(exe_res_from_mem),
+  .exe_dest(exe_dest),
+  .exe_gr_we(exe_gr_we),
+  .data_sram_rdata(data_sram_rdata),
+  .mem_gr_we(mem_gr_we),
+  .mem_dest(mem_dest),
+  .mem_alu_result(mem_alu_result),
+  .mem_res_from_mem(mem_res_from_mem),
+  .es_pc(es_pc),
   .es_valid(es_valid),
-  //.ms_pc(ms_pc),
+  .ms_pc(ms_pc),
   .ms_valid(ms_valid),
   
 //  .block(block),
@@ -291,30 +271,27 @@ MEMstage my_mem (
   .ms_allowin(ms_allowin),
   .es2ms_valid(es2ms_valid),
   .ms2ws_valid(ms2ws_valid),
-  //.final_result(final_result)
+  .final_result(final_result)
   //.mem_result(mem_result)
-  .mem_forward(mem_forward)
 );
 
 WBstage my_wb (
   .clk(clk),
   .resetn(resetn),
   .reset(reset),
-  . ms2ws_bus( ms2ws_bus),
-//  .data_sram_rdata(data_sram_rdata),
-//  .mem_gr_we(mem_gr_we),
-//  .mem_dest(mem_dest),
-//  .mem_alu_result(mem_alu_result),
-//  .mem_res_from_mem(mem_res_from_mem),
-  .ws2ds_bus(ws2ds_bus),
-//  .rf_we(rf_we),
-//  .rf_waddr(rf_waddr),
-//  .rf_wdata(rf_wdata),
+  .data_sram_rdata(data_sram_rdata),
+  .mem_gr_we(mem_gr_we),
+  .mem_dest(mem_dest),
+  .mem_alu_result(mem_alu_result),
+  .mem_res_from_mem(mem_res_from_mem),
+  .rf_we(rf_we),
+  .rf_waddr(rf_waddr),
+  .rf_wdata(rf_wdata),
   .debug_wb_pc(debug_wb_pc),
   .debug_wb_rf_we(debug_wb_rf_we),
   .debug_wb_rf_wnum(debug_wb_rf_wnum),
   .debug_wb_rf_wdata(debug_wb_rf_wdata),
-  //.ms_pc(ms_pc),
+  .ms_pc(ms_pc),
   .ms_valid(ms_valid),
   .ws_pc(ws_pc),
   .ws_valid(ws_valid),
@@ -331,10 +308,10 @@ WBstage my_wb (
   .es2ms_valid(es2ms_valid),
   .ms2ws_valid(ms2ws_valid),
   
-  //.dest_reg(dest_reg),
-  //.gr_we_reg(gr_we_reg)
-  //.final_result(final_result)
-    .wb_forward(wb_forward)
+  .dest_reg(dest_reg),
+  .gr_we_reg(gr_we_reg),
+  .final_result(final_result)
+
   
 );
 

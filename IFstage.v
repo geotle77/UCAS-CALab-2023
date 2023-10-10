@@ -2,35 +2,19 @@ module IFstage (
   input wire clk,
   input wire resetn,
   input wire reset,
-  
-  output reg fs_valid,
-  input wire ds_allowin,
-  output wire fs2ds_valid,
-  
   output wire inst_sram_en,
   output wire [3:0] inst_sram_we,
   output wire [31:0] inst_sram_addr,
   output wire [31:0] inst_sram_wdata,
   input wire [31:0] inst_sram_rdata,
-  
-  input wire [32:0] br_zip,
-//  input wire br_taken,
-//  input wire [31:0] br_target,
-  
-  output wire [63:0] fs2ds_bus
-//  output wire [31:0] inst,
-//  output wire [31:0] fs_pc,
-
-
+  input wire br_taken,
+  input wire [31:0] br_target,
+  output wire [31:0] inst,
+  output wire [31:0] fs_pc,
+  output reg fs_valid,
+  input wire ds_allowin,
+  output wire fs2ds_valid
 );
-
-//////////zip//////////
-wire br_taken;
-wire [31:0] br_target;
-
-
-wire [31:0] inst;
-wire [31:0] fs_pc;
 
 
 
@@ -75,13 +59,5 @@ assign inst_sram_we = 4'b0;
 assign inst_sram_addr = nextpc;
 assign inst_sram_wdata = 32'b0;
 assign inst = inst_sram_rdata;
-
-
-
-
-//////////////////////
-assign {br_taken, br_target} = br_zip;
-assign fs2ds_bus = {fs_pc, inst};
-
 
 endmodule
