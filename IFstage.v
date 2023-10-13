@@ -1,10 +1,11 @@
+`include "BUS_LEN.vh"
 module IFstage (
   input wire clk,
   input wire resetn,
   input wire reset,
   //the bus from the IDstage
   input wire [32:0] br_zip,
-  output wire [63:0] fs2ds_bus,
+  output wire [FS2DS_BUS_LEN:0] fs2ds_bus,
   //the interface with the SRAM
   output wire inst_sram_en,
   output wire [3:0] inst_sram_we,
