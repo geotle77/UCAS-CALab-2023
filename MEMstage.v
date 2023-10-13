@@ -29,8 +29,6 @@ assign {es_pc, alu_result, exe_res_from_mem, exe_dest, exe_gr_we} = es2ms_bus;
 
 
 reg [31:0] ms_pc;
-//reg mem_gr_we;
-//reg [4:0] mem_dest;
 assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result};
 
 
@@ -39,8 +37,6 @@ assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result};
 
 reg [31:0] mem_alu_result;
 reg mem_res_from_mem;
-//reg [4:0]  mem_dest;
-//reg        mem_gr_we;
 wire [31:0] mem_result;
 
 //////////pipeline//////////

@@ -40,10 +40,7 @@ wire mem_we;
 assign {ds_pc, alu_src1, alu_src2, alu_op, rkd_value, res_from_mem, gr_we, dest, mem_we} = ds2es_bus;
 
 reg [31:0] es_pc;
-// wire [31:0] alu_result;
 reg exe_res_from_mem;
-//reg [4:0] exe_dest;
-//reg exe_gr_we;
 assign es2ms_bus = {es_pc, alu_result, exe_res_from_mem, exe_dest, exe_gr_we};
 
 
@@ -54,9 +51,6 @@ reg [31:0] alu_src1_reg;
 reg [31:0] alu_src2_reg;
 reg [11:0] alu_op_reg;
 reg [31:0] rkd_value_reg;
-//reg [31:0] exe_res_from_mem;
-//reg        exe_gr_we;
-//reg [31:0] exe_dest;
 
 
 //////////pipeline////////

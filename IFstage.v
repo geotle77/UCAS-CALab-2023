@@ -18,27 +18,23 @@ module IFstage (
 );
 
 
-
 //////////declaration//////////
 reg fs_valid;
-
 wire [31:0] seq_pc;
 wire [31:0] nextpc;
 reg [31:0] pc;
-
-//////////zip//////////
 wire br_taken;
 wire [31:0] br_target;
-assign {br_taken, br_target} = br_zip;
-
 wire [31:0] fs_pc;
 wire [31:0] inst;
+
+//////////zip//////////
+assign {br_taken, br_target} = br_zip;
 assign fs2ds_bus = {fs_pc, inst};
 
-
 //////////pipeline////////
-wire fs_ready_go; // fs可以接收数据
-wire fs_allowin; // fs可以接收指令
+wire fs_ready_go;
+wire fs_allowin;
 
 assign fs_ready_go = 1'b1;
 assign fs_allowin = ~fs_valid || fs_ready_go && ds_allowin;

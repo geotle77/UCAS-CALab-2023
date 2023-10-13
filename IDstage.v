@@ -27,8 +27,6 @@ module IDstage (
   
   input wire es_inst_is_ld_w,
   output wire inst_ld_w
-  
-  
 );
 
 //////////zip//////////
@@ -130,10 +128,6 @@ wire [31:0] rf_rdata1;
 wire [ 4:0] rf_raddr2;
 wire [31:0] rf_rdata2;
 
-// wire [31:0] alu_src1   ;
-// wire [31:0] alu_src2   ;
-// wire [31:0] alu_result ;
-
 reg [31:0] inst_reg;
 
 
@@ -148,7 +142,9 @@ wire ds_ready_go; // ds可以接收数据
 
 
 assign ds_ready_go    =
-~(ds_valid && ((es_valid && exe_gr_we && es_inst_is_ld_w &&  (exe_dest == rf_raddr1 || exe_dest == rf_raddr2))));
+~(ds_valid && ((es_valid && exe_gr_we && es_inst_is_ld_w && 
+        (exe_dest == rf_raddr1 && |rf_raddr1 && ~src1_is_pc || 
+        exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm))));
 
 
 assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin; // ds可以接收指令的条件：ds数据存储无效，或，ds可以接收数据且ds数据可以传递下去

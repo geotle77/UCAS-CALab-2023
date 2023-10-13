@@ -31,7 +31,6 @@ wire [4:0] rf_waddr;
 wire [31:0] rf_wdata;
 assign rf_zip = {rf_we, rf_waddr, rf_wdata};
 
-//wire [31:0] data_sram_rdata;
 wire [31:0] ms_pc;
 wire mem_gr_we;
 wire [4:0] mem_dest;
@@ -42,23 +41,9 @@ assign {ms_pc, mem_gr_we, mem_dest, final_result} = ms2ws_bus;
 
 
 reg [31:0] ws_pc;
-
-//reg [31:0] data_sram_rdata_reg;
-//reg gr_we_reg;
-//reg [4:0] dest_reg;
 reg [31:0] alu_result_reg;
 reg [31:0] res_from_mem_reg;
-
-
-//wire [31:0] mem_result;
-// wire [31:0] final_result;
-//wire rf_we;
-//wire [ 4:0] rf_waddr;
-//wire [31:0] rf_wdata;
-
-  reg [31:0] final_result_reg;
-  //reg [31:0] mem_result_reg;
-
+reg [31:0] final_result_reg;
 
 //////////pipeline//////////
 wire ws_ready_go;
@@ -76,21 +61,14 @@ always @(posedge clk) begin
   
   if(ms2ws_valid && ws_allowin)begin
     ws_pc <= ms_pc;
-    //data_sram_rdata_reg <= data_sram_rdata;
     gr_we_reg <= mem_gr_we;
     dest_reg <= mem_dest;
-//    alu_result_reg <= mem_alu_result;
-//    res_from_mem_reg <= mem_res_from_mem;
     final_result_reg <= final_result;
-    //mem_result_reg <= mem_result;
   end
 end
 
 //////////assign//////////
 
-
-//assign mem_result = data_sram_rdata_reg;
-//assign final_result = res_from_mem_reg ? mem_result : alu_result_reg;
 
 assign rf_we = gr_we_reg && ws_valid;
 assign rf_waddr = dest_reg;
