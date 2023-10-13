@@ -133,12 +133,7 @@ reg [31:0] inst_reg;
 
 
 //////////pipeline//////////
-wire ds_ready_go; // ds可以接收数据
-//wire ds_allowin; // ds可以接收指令
-//wire ds2es_valid; // ds数据可以传递下去
-// reg ds_valid; // ds数据有效
-
-//assign ds_ready_go = 1'b1; // ds随时可以接收数据
+wire ds_ready_go;
 
 
 assign ds_ready_go    =
@@ -147,25 +142,22 @@ assign ds_ready_go    =
         exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm))));
 
 
-assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin; // ds可以接收指令的条件：ds数据存储无效，或，ds可以接收数据且ds数据可以传递下去
-assign ds2es_valid = ds_valid && ds_ready_go; // ds数据传递下去的条件：ds数据有效且ds可以接收数据
+assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin;
+assign ds2es_valid = ds_valid && ds_ready_go;
 
 always @(posedge clk) begin
   if (reset || br_taken) begin
     ds_valid <= 1'b0;
-  end else if (ds_allowin) begin // 如果ds可以接收指令，fs数据可以传递给ds，则ds数据有效
+  end else if (ds_allowin) begin
     ds_valid <= fs2ds_valid;
   end
   
-  if(fs2ds_valid && ds_allowin)begin // 如果ds可以接收指令，fs数据可以传递给ds，则fs的指令传递给ds
+  if(fs2ds_valid && ds_allowin)begin
     ds_pc <= fs_pc;
     inst_reg <= inst;
   end
 end
 
-//always @(posedge clk) begin
-//  inst_reg <= inst;
-//end
 
 //////////assign//////////
 
