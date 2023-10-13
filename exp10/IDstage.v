@@ -133,9 +133,8 @@ wire ds_ready_go;
 
 
 assign ds_ready_go    =
-~(ds_valid && ((exe_rf_we && es_inst_is_ld_w && 
-        (exe_dest == rf_raddr1 && |rf_raddr1 && ~src1_is_pc || 
-        exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm))));
+~(ds_valid && ((exe_rf_we && es_inst_is_ld_w && (exe_dest == rf_raddr1 && |rf_raddr1 && ~src1_is_pc  && |alu_op || 
+                                                 exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm && |alu_op))));
 
 
 assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin;
