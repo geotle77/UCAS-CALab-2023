@@ -12,8 +12,7 @@ module MEMstage (
   input wire [70:0] es2ms_bus,
   output wire [69:0] ms2ws_bus,
 
-  output reg ms_valid,
-  output reg mem_gr_we,
+  output wire mem_rf_we,
   output reg [4:0] mem_dest,
   output wire [31:0] final_result
 );
@@ -39,6 +38,11 @@ reg [31:0] mem_alu_result;
 reg mem_res_from_mem;
 wire [31:0] mem_result;
 
+wire mem_rf_we;
+
+reg ms_valid;
+reg mem_gr_we;
+
 //////////pipeline//////////
 wire ms_ready_go;
 
@@ -63,7 +67,7 @@ always @(posedge clk) begin
 end
 
 
-
+assign mem_rf_we = ms_valid && mem_gr_we;
 
 assign mem_result = data_sram_rdata;
 assign final_result = mem_res_from_mem ? mem_result : mem_alu_result;
