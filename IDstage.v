@@ -2,35 +2,17 @@ module IDstage (
   input wire clk,
   input wire resetn,
   input wire reset,
-  input wire [31:0] inst,
-  output wire br_taken,
-  output wire [31:0] br_target,
-  
-  output wire [31:0] alu_src1,
-  output wire [31:0] alu_src2,
-  output wire [11:0] alu_op,
-  output wire [31:0] rkd_value,
-  output wire [31:0] res_from_mem,
-  output wire gr_we,
-  output wire [4:0] dest,
-  output wire mem_we,
-  
-  input wire rf_we,
-  input wire [4:0] rf_waddr,
-  input wire [31:0] rf_wdata,
-  
-  input wire [31:0] fs_pc,
-  input wire fs_valid,
-  output reg [31:0] ds_pc,
-  output reg ds_valid,
-  
   
   input wire es_allowin,
   output wire ds_allowin,
   input wire fs2ds_valid,
   output wire ds2es_valid,
   
-  
+  output wire [32:0] br_zip,
+  input wire [37:0] rf_zip,
+  output wire [147:0] ds2es_bus,
+  input wire [63:0] fs2ds_bus,
+
   input wire es_valid,
   input wire ms_valid,
   input wire ws_valid,
@@ -40,7 +22,6 @@ module IDstage (
   input wire [4:0] exe_dest,
   input wire [4:0] mem_dest,
   input wire [4:0] dest_reg,
-  
   input wire [31:0] alu_result,
   input wire [31:0] final_result,
   
@@ -50,10 +31,33 @@ module IDstage (
   
 );
 
+//////////zip//////////
+wire br_taken;
+wire [31:0] br_target;
+assign br_zip = {br_taken, br_target};
 
+wire rf_we;
+wire [4:0] rf_waddr;
+wire [31:0] rf_wdata;
+assign {rf_we, rf_waddr, rf_wdata} = rf_zip;
+
+wire [31:0] fs_pc;
+wire [31:0] inst;
+assign {fs_pc, inst} = fs2ds_bus;
+
+reg [31:0] ds_pc;
+wire [31:0] alu_src1;
+wire [31:0] alu_src2;
+wire [11:0] alu_op;
+wire [31:0] rkd_value;
+wire res_from_mem;
+wire gr_we;
+wire [4:0] dest;
+wire mem_we;
+assign ds2es_bus = {ds_pc, alu_src1, alu_src2, alu_op, rkd_value, res_from_mem, gr_we, dest, mem_we};
 
 //////////declaration////////
-
+reg ds_valid;
 
 
 // wire        br_taken;
@@ -280,7 +284,7 @@ regfile u_regfile(
 //assign rkd_value = rf_rdata2;
 
 assign rj_value = 
-    (exe_gr_we && es_valid && exe_dest == rf_raddr1)? alu_result :
+    (exe_gr_we && es_valid && exe_dest == rf_raddr1)? alu_result :////
     (mem_gr_we && ms_valid && mem_dest == rf_raddr1)? final_result :
     (gr_we_reg && ws_valid  && dest_reg   == rf_raddr1)? rf_wdata   :
     rf_rdata1;
@@ -302,5 +306,14 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (ds_pc + br_off
 
 assign alu_src1 = src1_is_pc  ? ds_pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
+
+
+
+
+
+
+
+
+
 
 endmodule
