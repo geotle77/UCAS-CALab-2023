@@ -13,12 +13,8 @@ module IDstage (
   output wire [147:0] ds2es_bus,
   input wire [63:0] fs2ds_bus,
 
-  input wire es_valid,
-  input wire ms_valid,
-  input wire ws_valid,
-  input wire exe_gr_we,
-  input wire mem_gr_we,
-  input wire gr_we_reg,
+  input wire exe_rf_we,
+  input wire mem_rf_we,
   input wire [4:0] exe_dest,
   input wire [4:0] mem_dest,
   input wire [4:0] dest_reg,
@@ -137,7 +133,7 @@ wire ds_ready_go;
 
 
 assign ds_ready_go    =
-~(ds_valid && ((es_valid && exe_gr_we && es_inst_is_ld_w && 
+~(ds_valid && ((exe_rf_we && es_inst_is_ld_w && 
         (exe_dest == rf_raddr1 && |rf_raddr1 && ~src1_is_pc || 
         exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm))));
 
@@ -272,14 +268,14 @@ regfile u_regfile(
 //assign rkd_value = rf_rdata2;
 
 assign rj_value = 
-    (exe_gr_we && es_valid && exe_dest == rf_raddr1)? alu_result :////
-    (mem_gr_we && ms_valid && mem_dest == rf_raddr1)? final_result :
-    (gr_we_reg && ws_valid  && dest_reg   == rf_raddr1)? rf_wdata   :
+    (exe_rf_we && exe_dest == rf_raddr1)? alu_result :////
+    (mem_rf_we && mem_dest == rf_raddr1)? final_result :
+    (rf_we  && dest_reg   == rf_raddr1)? rf_wdata   :
     rf_rdata1;
 assign rkd_value = 
-    (exe_gr_we && es_valid && exe_dest == rf_raddr2)? alu_result :
-    (mem_gr_we && ms_valid && mem_dest == rf_raddr2)? final_result :
-    (gr_we_reg && ws_valid  && dest_reg   == rf_raddr2)? rf_wdata   :
+    (exe_rf_we && exe_dest == rf_raddr2)? alu_result :
+    (mem_rf_we && mem_dest == rf_raddr2)? final_result :
+    (rf_we  && dest_reg   == rf_raddr2)? rf_wdata   :
     rf_rdata2;
 
 assign rj_eq_rd = (rj_value == rkd_value);

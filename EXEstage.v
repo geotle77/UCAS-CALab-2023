@@ -16,12 +16,11 @@ module EXEstage (
   output wire [31:0] data_sram_addr,
   output wire [31:0] data_sram_wdata,
 
-  output reg es_valid,
-  output reg exe_gr_we,
+
   output reg [4:0] exe_dest,
   output wire [31:0] alu_result,
   
-  
+  output wire exe_rf_we,
   output reg es_inst_is_ld_w,
   input wire inst_ld_w
 );
@@ -45,6 +44,9 @@ assign es2ms_bus = {es_pc, alu_result, exe_res_from_mem, exe_dest, exe_gr_we};
 
 
 //////////declaration////////
+
+reg es_valid;
+reg exe_gr_we;
 
 reg        mem_we_reg;
 reg [31:0] alu_src1_reg;
@@ -103,6 +105,7 @@ alu u_alu(
     .alu_result (alu_result)
     );
     
+assign exe_rf_we = es_valid && exe_gr_we;
     
 assign data_sram_en    = mem_we_reg || exe_res_from_mem;//1'b1;
 assign data_sram_we    = {4{mem_we_reg && es_valid}};

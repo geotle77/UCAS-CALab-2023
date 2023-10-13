@@ -45,14 +45,11 @@ wire ds2es_valid;
 wire es2ms_valid;
 wire ms2ws_valid;
 
-wire es_valid;
-wire ms_valid;
-wire ws_valid;
-wire mem_gr_we;
+
+wire mem_rf_we;
 wire [4:0] mem_dest;
-wire exe_gr_we;
+wire exe_rf_we;
 wire [4:0] exe_dest;
-wire gr_we_reg;
 wire [4:0] dest_reg;
 wire [31:0] alu_result;
 wire [31:0] final_result;
@@ -103,12 +100,9 @@ IDstage my_id (
   .rf_zip(rf_zip),
   .fs2ds_bus(fs2ds_bus),
 
-  .es_valid(es_valid),
-  .ms_valid(ms_valid),
-  .ws_valid(ws_valid),
-  .exe_gr_we(exe_gr_we),
-  .mem_gr_we(mem_gr_we),
-  .gr_we_reg(gr_we_reg),
+
+  .exe_rf_we(exe_rf_we),
+  .mem_rf_we(mem_rf_we),
   .exe_dest(exe_dest),
   .mem_dest(mem_dest),
   .dest_reg(dest_reg),
@@ -137,8 +131,7 @@ EXEstage my_exe (
   .data_sram_addr(data_sram_addr),
   .data_sram_wdata(data_sram_wdata),
 
-  .es_valid(es_valid),
-  .exe_gr_we(exe_gr_we),
+  .exe_rf_we(exe_rf_we),
   .exe_dest(exe_dest),
   .alu_result(alu_result),
 
@@ -160,8 +153,7 @@ MEMstage my_mem (
   .es2ms_bus(es2ms_bus),
   .ms2ws_bus(ms2ws_bus),
   
-  .ms_valid(ms_valid),
-  .mem_gr_we(mem_gr_we),
+  .mem_rf_we(mem_rf_we),
   .mem_dest(mem_dest),
   .final_result(final_result)
 );
@@ -185,7 +177,6 @@ WBstage my_wb (
   .debug_wb_rf_wdata(debug_wb_rf_wdata),
 
   .ws_valid(ws_valid),
-  .gr_we_reg(gr_we_reg),
   .dest_reg(dest_reg)
 );
 
