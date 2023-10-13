@@ -32,6 +32,8 @@ assign op_srl  = alu_op[ 9];
 assign op_sra  = alu_op[10];
 assign op_lui  = alu_op[11];
 
+
+
 wire [31:0] add_sub_result;
 wire [31:0] slt_result;
 wire [31:0] sltu_result;
@@ -95,5 +97,6 @@ assign alu_result = ({32{op_add|op_sub}} & add_sub_result)
                   | ({32{op_lui       }} & lui_result)
                   | ({32{op_sll       }} & sll_result)
                   | ({32{op_srl|op_sra}} & sr_result);
+                  | ({32})
 
 endmodule
