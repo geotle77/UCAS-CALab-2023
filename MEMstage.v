@@ -2,39 +2,41 @@ module MEMstage (
   input wire clk,
   input wire resetn,
   input wire reset,
-  input wire [31:0] alu_result,
-  input wire [31:0] exe_res_from_mem,
-  input wire [4:0] exe_dest,
-  input wire exe_gr_we,
-  
-  output wire [31:0] data_sram_rdata,
-  output reg mem_gr_we,
-  output reg [4:0] mem_dest,
-  output reg [31:0] mem_alu_result,
-  output reg [31:0] mem_res_from_mem,
-  
-  input wire [31:0] es_pc,
-  input wire es_valid,
-  output reg [31:0] ms_pc,
-  output reg ms_valid,
-  
+  input wire [31:0] data_sram_rdata,
   
   input wire ws_allowin,
   output wire ms_allowin,
   input wire es2ms_valid,
   output wire ms2ws_valid,
   
+  input wire [70:0] es2ms_bus,
+  output wire [69:0] ms2ws_bus,
+
+  output reg ms_valid,
+  output reg mem_gr_we,
+  output reg [4:0] mem_dest,
   output wire [31:0] final_result
-  //output wire [31:0] mem_result
 );
+
+
+//////////zip//////////
+wire [31:0] es_pc;
+wire [31:0] alu_result;
+wire exe_res_from_mem;
+wire [4:0] exe_dest;
+wire exe_gr_we;
+assign {es_pc, alu_result, exe_res_from_mem, exe_dest, exe_gr_we} = es2ms_bus;
+
+
+reg [31:0] ms_pc;
+assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result};
 
 
 //////////declaration//////////
 
-//reg [31:0] mem_alu_result;
-//reg [31:0] mem_res_from_mem;
-//reg [4:0]  mem_dest;
-//reg        mem_gr_we;
+
+reg [31:0] mem_alu_result;
+reg mem_res_from_mem;
 wire [31:0] mem_result;
 
 //////////pipeline//////////

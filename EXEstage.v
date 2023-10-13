@@ -2,40 +2,46 @@ module EXEstage (
   input wire clk,
   input wire resetn,
   input wire reset,
-  input wire [31:0] alu_src1,
-  input wire [31:0] alu_src2,
-  input wire [11:0] alu_op,
-  input wire [31:0] rkd_value,
-  input wire [31:0] res_from_mem,
-  input wire gr_we,
-  input wire [4:0] dest,
-  input wire mem_we,
-  
-  output wire [31:0] alu_result,
-  output reg [31:0] exe_res_from_mem,
-  output reg [4:0] exe_dest,
-  output reg exe_gr_we,
-  
-  output wire data_sram_en,
-  output wire [3:0] data_sram_we,
-  output wire [31:0] data_sram_addr,
-  output wire [31:0] data_sram_wdata,
-  input wire [31:0] data_sram_rdata,
-  
-  input wire [31:0] ds_pc,
-  input wire ds_valid,
-  output reg [31:0] es_pc,
-  output reg es_valid,
-  
   
   input wire ms_allowin,
   output wire es_allowin,
   input wire ds2es_valid,
   output wire es2ms_valid,
   
+  input wire [147:0] ds2es_bus,
+  output wire [70:0] es2ms_bus,
+  
+  output wire data_sram_en,
+  output wire [3:0] data_sram_we,
+  output wire [31:0] data_sram_addr,
+  output wire [31:0] data_sram_wdata,
+
+  output reg es_valid,
+  output reg exe_gr_we,
+  output reg [4:0] exe_dest,
+  output wire [31:0] alu_result,
+  
+  
   output reg es_inst_is_ld_w,
   input wire inst_ld_w
 );
+
+
+//////////zip//////////
+wire [31:0] ds_pc;
+wire [31:0] alu_src1;
+wire [31:0] alu_src2;
+wire [11:0] alu_op;
+wire [31:0] rkd_value;
+wire res_from_mem;
+wire gr_we;
+wire [4:0] dest;
+wire mem_we;
+assign {ds_pc, alu_src1, alu_src2, alu_op, rkd_value, res_from_mem, gr_we, dest, mem_we} = ds2es_bus;
+
+reg [31:0] es_pc;
+reg exe_res_from_mem;
+assign es2ms_bus = {es_pc, alu_result, exe_res_from_mem, exe_dest, exe_gr_we};
 
 
 //////////declaration////////
@@ -45,9 +51,6 @@ reg [31:0] alu_src1_reg;
 reg [31:0] alu_src2_reg;
 reg [11:0] alu_op_reg;
 reg [31:0] rkd_value_reg;
-//reg [31:0] exe_res_from_mem;
-//reg        exe_gr_we;
-//reg [31:0] exe_dest;
 
 
 //////////pipeline////////

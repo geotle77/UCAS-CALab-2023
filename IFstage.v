@@ -2,20 +2,16 @@ module IFstage (
   input wire clk,
   input wire resetn,
   input wire reset,
-  
-  //the interface between Inst_SRAM to IFstage
+  //the bus from the IDstage
+  input wire [32:0] br_zip,
+  output wire [63:0] fs2ds_bus,
+  //the interface with the SRAM
   output wire inst_sram_en,
   output wire [3:0] inst_sram_we,
   output wire [31:0] inst_sram_addr,
   output wire [31:0] inst_sram_wdata,
   input wire [31:0] inst_sram_rdata,
-  //branch signal
-  input wire br_taken,
-  input wire [31:0] br_target,
-  //IF2ID bus
-  output wire [31:0] inst,
-  output wire [31:0] fs_pc,
-  //the interface between IFstage to IDstage
+  //the interface between the IFstage and the IDstage
   output reg fs_valid,
   input wire ds_allowin,
   output wire fs2ds_valid
@@ -24,15 +20,22 @@ module IFstage (
 
 
 //////////declaration//////////
+reg fs_valid;
 wire [31:0] seq_pc;
 wire [31:0] nextpc;
 reg [31:0] pc;
+wire br_taken;
+wire [31:0] br_target;
+wire [31:0] fs_pc;
+wire [31:0] inst;
 
-
+//////////zip//////////
+assign {br_taken, br_target} = br_zip;
+assign fs2ds_bus = {fs_pc, inst};
 
 //////////pipeline////////
-wire fs_ready_go; // 
-wire fs_allowin; //
+wire fs_ready_go; // fs���Խ�������
+wire fs_allowin; // fs���Խ���ָ��
 
 assign fs_ready_go = 1'b1;
 assign fs_allowin = ~fs_valid || fs_ready_go && ds_allowin;

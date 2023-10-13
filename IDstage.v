@@ -2,35 +2,17 @@ module IDstage (
   input wire clk,
   input wire resetn,
   input wire reset,
-  input wire [31:0] inst,
-  output wire br_taken,
-  output wire [31:0] br_target,
-  
-  output wire [31:0] alu_src1,
-  output wire [31:0] alu_src2,
-  output wire [11:0] alu_op,
-  output wire [31:0] rkd_value,
-  output wire [31:0] res_from_mem,
-  output wire gr_we,
-  output wire [4:0] dest,
-  output wire mem_we,
-  
-  input wire rf_we,
-  input wire [4:0] rf_waddr,
-  input wire [31:0] rf_wdata,
-  
-  input wire [31:0] fs_pc,
-  input wire fs_valid,
-  output reg [31:0] ds_pc,
-  output reg ds_valid,
-  
   
   input wire es_allowin,
   output wire ds_allowin,
   input wire fs2ds_valid,
   output wire ds2es_valid,
   
-  
+  output wire [32:0] br_zip,
+  input wire [37:0] rf_zip,
+  output wire [147:0] ds2es_bus,
+  input wire [63:0] fs2ds_bus,
+
   input wire es_valid,
   input wire ms_valid,
   input wire ws_valid,
@@ -40,20 +22,40 @@ module IDstage (
   input wire [4:0] exe_dest,
   input wire [4:0] mem_dest,
   input wire [4:0] dest_reg,
-  
   input wire [31:0] alu_result,
   input wire [31:0] final_result,
   
   input wire es_inst_is_ld_w,
   output wire inst_ld_w
-  
-  
 );
 
+//////////zip//////////
+wire br_taken;
+wire [31:0] br_target;
+assign br_zip = {br_taken, br_target};
 
+wire rf_we;
+wire [4:0] rf_waddr;
+wire [31:0] rf_wdata;
+assign {rf_we, rf_waddr, rf_wdata} = rf_zip;
+
+wire [31:0] fs_pc;
+wire [31:0] inst;
+assign {fs_pc, inst} = fs2ds_bus;
+
+reg [31:0] ds_pc;
+wire [31:0] alu_src1;
+wire [31:0] alu_src2;
+wire [11:0] alu_op;
+wire [31:0] rkd_value;
+wire res_from_mem;
+wire gr_we;
+wire [4:0] dest;
+wire mem_we;
+assign ds2es_bus = {ds_pc, alu_src1, alu_src2, alu_op, rkd_value, res_from_mem, gr_we, dest, mem_we};
 
 //////////declaration////////
-
+reg ds_valid;
 
 
 // wire        br_taken;
@@ -126,46 +128,36 @@ wire [31:0] rf_rdata1;
 wire [ 4:0] rf_raddr2;
 wire [31:0] rf_rdata2;
 
-// wire [31:0] alu_src1   ;
-// wire [31:0] alu_src2   ;
-// wire [31:0] alu_result ;
-
 reg [31:0] inst_reg;
 
 
 
 //////////pipeline//////////
-wire ds_ready_go; // ds可以接收数据
-//wire ds_allowin; // ds可以接收指令
-//wire ds2es_valid; // ds数据可以传递下去
-// reg ds_valid; // ds数据有效
-
-//assign ds_ready_go = 1'b1; // ds随时可以接收数据
+wire ds_ready_go;
 
 
 assign ds_ready_go    =
-~(ds_valid && ((es_valid && exe_gr_we && es_inst_is_ld_w &&  (exe_dest == rf_raddr1 || exe_dest == rf_raddr2))));
+~(ds_valid && ((es_valid && exe_gr_we && es_inst_is_ld_w && 
+        (exe_dest == rf_raddr1 && |rf_raddr1 && ~src1_is_pc || 
+        exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm))));
 
 
-assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin; // ds可以接收指令的条件：ds数据存储无效，或，ds可以接收数据且ds数据可以传递下去
-assign ds2es_valid = ds_valid && ds_ready_go; // ds数据传递下去的条件：ds数据有效且ds可以接收数据
+assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin;
+assign ds2es_valid = ds_valid && ds_ready_go;
 
 always @(posedge clk) begin
   if (reset || br_taken) begin
     ds_valid <= 1'b0;
-  end else if (ds_allowin) begin // 如果ds可以接收指令，fs数据可以传递给ds，则ds数据有效
+  end else if (ds_allowin) begin
     ds_valid <= fs2ds_valid;
   end
   
-  if(fs2ds_valid && ds_allowin)begin // 如果ds可以接收指令，fs数据可以传递给ds，则fs的指令传递给ds
+  if(fs2ds_valid && ds_allowin)begin
     ds_pc <= fs_pc;
     inst_reg <= inst;
   end
 end
 
-//always @(posedge clk) begin
-//  inst_reg <= inst;
-//end
 
 //////////assign//////////
 
@@ -280,7 +272,7 @@ regfile u_regfile(
 //assign rkd_value = rf_rdata2;
 
 assign rj_value = 
-    (exe_gr_we && es_valid && exe_dest == rf_raddr1)? alu_result :
+    (exe_gr_we && es_valid && exe_dest == rf_raddr1)? alu_result :////
     (mem_gr_we && ms_valid && mem_dest == rf_raddr1)? final_result :
     (gr_we_reg && ws_valid  && dest_reg   == rf_raddr1)? rf_wdata   :
     rf_rdata1;
@@ -302,5 +294,14 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (ds_pc + br_off
 
 assign alu_src1 = src1_is_pc  ? ds_pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
+
+
+
+
+
+
+
+
+
 
 endmodule
