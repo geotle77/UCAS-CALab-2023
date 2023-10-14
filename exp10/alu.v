@@ -158,7 +158,7 @@ always @(posedge clk) begin
     div_data_valid <= 1'b0;
   end
 
-  div_gen div(
+  IP_DIV div(
   .aclk                   (clk),
   .s_axis_divisor_tdata   (alu_src2),
   .s_axis_dividend_tdata  (alu_src1),
@@ -170,7 +170,7 @@ always @(posedge clk) begin
   .m_axis_dout_tvalid     (div_out_valid)
 );
 
-div_gen_u divu(
+IP_DIV_U divu(
   .aclk                   (clk),
   .s_axis_divisor_tdata   (alu_src2),
   .s_axis_dividend_tdata  (alu_src1),
