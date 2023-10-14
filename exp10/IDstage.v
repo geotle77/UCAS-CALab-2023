@@ -10,9 +10,9 @@ module IDstage (
   output wire ds2es_valid,
   
   output wire [32:0] br_zip,
-  input wire [37:0] rf_zip,
-  output wire [147:0] ds2es_bus,
-  input wire [63:0] fs2ds_bus,
+  input wire [WB_RF_BUS:0] rf_zip,
+  output wire[DS2ES_BUS_LEN-1:0] ds2es_bus,
+  input wire [FS2DS_BUS_LEN:0] fs2ds_bus,
 
   input wire exe_rf_we,
   input wire mem_rf_we,
@@ -253,18 +253,17 @@ assign alu_op[18] = inst_mod_wu;
 
 
 assign need_ui5   =  inst_slli_w | inst_srli_w | inst_srai_w;
-assign need_ui12  =  inst_andi | inst_ori | inst_xori | inst_sltui;
-assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w | inst_slti;
+assign need_ui12  =  inst_andi | inst_ori | inst_xori;
+assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w | inst_slti | inst_sltui;
 assign need_si16  =  inst_jirl | inst_beq | inst_bne;
 assign need_si20  =  inst_lu12i_w | inst_pcaddul2i;
 assign need_si26  =  inst_b | inst_bl;
 assign src2_is_4  =  inst_jirl | inst_bl;
 
-assign imm = src2_is_4 ? 32'h4                      :
-             need_si20 ? {i20[19:0], 12'b0}         :
-             need_ui5 ? {27'b0, rk}                 :
-             need_ui12 ? {20'b0,i12}                :
-/*need_si12*/           {{20{i12[11]}}, i12[11:0]} ;
+assign imm =                  src2_is_4 ? 32'h4                                    :
+                              need_si20 ? {i20[19:0], 12'b0}                       :
+  /*need_ui5 || need_si12*/   (need_ui5 || need_si12) ? {{20{i12[11]}}, i12[11:0]} :
+                              {20'b0, i12[11:0]};
 
 assign br_offs = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
                              {{14{i16[15]}}, i16[15:0], 2'b0} ;
@@ -273,7 +272,7 @@ assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};
 
 assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w;
 
-assign src1_is_pc    = inst_jirl | inst_bl;
+assign src1_is_pc    = inst_jirl | inst_bl | inst_pcaddu12i;
 
 assign src2_is_imm   = inst_slli_w |
                        inst_srli_w |
@@ -337,14 +336,5 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (ds_pc + br_off
 
 assign alu_src1 = src1_is_pc  ? ds_pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
-
-
-
-
-
-
-
-
-
 
 endmodule
