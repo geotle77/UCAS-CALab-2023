@@ -1,15 +1,40 @@
 `timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 2022/09/09 21:48:58
+// Design Name: 
+// Module Name: booth_multiplier
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
 
-
-//booth涔樻硶鍣ㄩ《灞傛ā鍧?
+//booth乘法器顶层模块
 module booth_multiplier(
     input clk,
-    input  [33:0] x, //琚箻鏁?
-    input  [33:0] y, //涔樻暟
-    output [67:0] z  //涔樼Н
+    input mul_signed, 
+    input  [31:0] x_origin, //被乘数
+    input  [31:0] y_origin, //乘数
+    output reg [63:0] result  //乘积
 );
+wire [33:0] x;
+wire [33:0] y;
+assign x        = {{2{mul_signed & x_origin[31]}} ,x_origin};
+assign y        = {{2{mul_signed & y_origin[31]}} ,y_origin};
 
-//鐢熸垚閮ㄥ垎绉紙partial product generator, ppg锛?
+
+
+//生成部分积（partial product generator, ppg）
 wire [67:0] ppg_p [16:0];
 wire [16:0] ppg_c;
 
@@ -25,7 +50,7 @@ generate
     end
 endgenerate
 
-//鍗庤幈澹爲锛坵allace tree, wt锛?
+//华莱士树（wallace tree, wt）
 wire [14:0] wt_cio [68:0];
 wire [67:0] wt_c;
 wire [67:0] wt_s;
@@ -34,7 +59,7 @@ assign wt_cio[0] = ppg_c[14:0];
 
 genvar j;
 generate
-    for (j=0; j<34; j=j+1) begin : wt_loop_1
+    for (j=0; j<68; j=j+1) begin : wt_loop
         wallace_tree u_wt(
             .n      ({
                         ppg_p[16][j],
@@ -52,64 +77,28 @@ generate
     end
 endgenerate
 
-//////////pipeline_start//////////
-
-reg [14:0] wt_cio_reg [68:0];
-reg [67:0] wt_c_reg;
-reg [67:0] wt_s_reg;
-
-genvar l;
-generate
-    for (l=0; l<68; l=l+1) begin : reg_loop
-        always @(posedge clk) begin
-            wt_cio_reg[l] <= wt_cio[l];
-        end
-    end
-endgenerate
-always @(posedge clk) begin
-    wt_c_reg <= wt_c;
-    wt_s_reg <= wt_s;
-end
-
-//////////pipeline_end//////////
-
-
-
-
-genvar k;
-generate
-    for (k=34; k<68; k=k+1) begin : wt_loop_2
-        wallace_tree u_wt(
-            .n      ({
-                        ppg_p[16][k],
-                        ppg_p[15][k], ppg_p[14][k], ppg_p[13][k], ppg_p[12][k], 
-                        ppg_p[11][k], ppg_p[10][k], ppg_p[ 9][k], ppg_p[ 8][k], 
-                        ppg_p[ 7][k], ppg_p[ 6][k], ppg_p[ 5][k], ppg_p[ 4][k], 
-                        ppg_p[ 3][k], ppg_p[ 2][k], ppg_p[ 1][k], ppg_p[ 0][k]
-                    }),
-            .cin    (wt_cio[k]),
-            .cout   (wt_cio[k+1]),
-            .c      (wt_c[k]),
-            .s      (wt_s[k])
-        );
-        
-    end
-endgenerate
-
-//64浣嶅姞娉曞櫒
+//64位加法器
+wire [67:0] z;
 assign z = {wt_c[66:0], ppg_c[15]} + wt_s[67:0] + ppg_c[16];
+assign result_origin = z[63:0];
+
+//////////pipeline test//////////
+wire [63:0] result_origin;
+always @(posedge clk) begin
+    result <= result_origin;
+end
 
 endmodule
 
 
-//閮ㄥ垎绉敓鎴愭ā鍧?
+//部分积生成模块
 module partial_product_generator #(
     parameter XWIDTH = 68
 )(
-    input  [XWIDTH-1:0] x, //琚箻鏁?
+    input  [XWIDTH-1:0] x, //被乘数
     input  [       2:0] y, //y_{i+1}, y_{i}, y_{i-1}
-    output [XWIDTH-1:0] p, //閮ㄥ垎绉?
-    output              c  //杩涗綅
+    output [XWIDTH-1:0] p, //部分积
+    output              c  //进位
 );
 
 wire sn;
@@ -135,13 +124,13 @@ assign c = sn | sn2;
 endmodule
 
 
-//涓?姣旂壒鍏ㄥ姞鍣ㄦā鍧?
+//一比特全加器模块
 module one_bit_adder(
-    input  a,   //鍔犳暟
-    input  b,   //琚姞鏁?
-    input  c,   //杩涗綅杈撳叆
-    output s,   //鍜?
-    output cout //杩涗綅杈撳嚭
+    input  a,   //加数
+    input  b,   //被加数
+    input  c,   //进位输入
+    output s,   //和
+    output cout //进位输出
 );
 
 assign s = ~(~(a&~b&~c) & ~(~a&b&~c) & ~(~a&~b&c) & ~(a&b&c));
@@ -150,13 +139,13 @@ assign cout = a&b | a&c | b&c;
 endmodule
 
 
-//鍗庤幈澹爲妯″潡
+//华莱士树模块
 module wallace_tree(
-    input  [16:0] n,    //鍔犳暟
-    input  [14:0] cin,  //杩涗綅浼犻?掕緭鍏?
-    output [14:0] cout, //杩涗綅浼犻?掕緭鍑?
-    output        c,    //杩涗綅杈撳嚭
-    output        s     //鍜?
+    input  [16:0] n,    //加数
+    input  [14:0] cin,  //进位传递输入
+    output [14:0] cout, //进位传递输出
+    output        c,    //进位输出
+    output        s     //和
 );
 
 wire [15:0] adder_a;
