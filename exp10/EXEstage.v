@@ -99,9 +99,11 @@ end
 //////////assign//////////
 
 alu u_alu(
+    .clk        (clk        ),
     .alu_op     (alu_op_reg    ),
     .alu_src1   (alu_src1_reg  ),
     .alu_src2   (alu_src2_reg  ),
+    .alu_flag   (alu_flag),
     .alu_result (alu_result)
     );
     

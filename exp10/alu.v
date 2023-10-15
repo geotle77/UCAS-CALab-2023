@@ -68,8 +68,10 @@ wire [63:0] divu_result;
 //mul_src
 wire  [32:0]  mul_src1;
 wire  [32:0]  mul_src2;
+wire mul_complete;
 assign mul_src1 = {alu_src1[31] & ~op_mulhu, alu_src1[31:0]};
 assign mul_src2 = {alu_src2[31] & ~op_mulhu, alu_src2[31:0]};
+
 mul u_mul(
   .x(mul_src1),
   .y(mul_src2),

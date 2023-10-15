@@ -1,76 +1,94 @@
-module Div(
-    input  wire    clk,
-    input  wire    resetn,
-    input  wire    div,
-    input  wire    div_signed,
-    input  wire [31:0] x,   //被除数
-    input  wire [31:0] y,   //除数
-    output wire [63:0] s,   //结果
-    output wire    div_finish //除法完成信号
-);
+module DIV(
+    input wire clk,
+    input wire resetn,
+    input wire         sign,    //1为有符号，0为无符号
+    input wire         div_en,
+    input wire  [31:0] divisor, //
+    input wire  [31:0] dividend,
+    output wire [63:0] result,
+    output wire        flag
+    );
+
+    //除数和被除数的绝对值
+    wire [31:0] X_abs;
+    wire [31:0] Y_abs;
+    reg  [5:0]  counter;//计数器，33拍算出结果
+
+    wire X_signed=divisor[31]&sign;
+    wire Y_signed=dividend[31]&sign;
 
     wire        sign_s;
     wire        sign_r;
-    wire [31:0] abs_x;
-    wire [31:0] abs_y;
-    wire [32:0] pre_r;
-    wire [32:0] recover_r;
-    reg  [63:0] x_pad;
-    reg  [32:0] y_pad;
-    reg  [31:0] s_r;
-    reg  [32:0] r_r;    // 当前的余数
-    reg  [ 5:0] counter;
 
-// 1.确定符号位
-    assign sign_s = (x[31]^y[31]) & div_signed;
-    assign sign_r = x[31] & div_signed;
-    assign abs_x  = (div_signed & x[31]) ? (~x+1'b1): x;
-    assign abs_y  = (div_signed & y[31]) ? (~y+1'b1): y;
-// 2.循环迭代得到商和余数绝对值
-    assign complete = counter == 6'd33;
-    //初始化计数器
-    always @(posedge div_clk) begin
-        if(~resetn) begin
-            counter <= 6'b0;
+    assign sign_s = (divisor[31]^dividend[31]) & sign;
+    assign sign_r = divisor[31] & sign;
+
+    wire complete;
+    assign complete =counter[5]&counter[0]&(~|counter[4:1]);
+    assign flag=complete;
+    always @(posedge clk )begin
+        if(!resetn)begin
+            counter <= 6'd0;
+            //flag <= 1'b0;
         end
-        else if(div) begin
+        else if(div_en)begin
             if(complete)
-                counter <= 6'b0;
+                counter <= 6'd0;
             else
-                counter <= counter + 1'b1;
-        end
-    end
-    //准备操作数,counter=0
-    always @(posedge div_clk) begin
-        if(~resetn)
-            {x_pad, y_pad} <= {64'b0, 33'b0};
-        else if(div) begin
-            if(~|counter)
-                {x_pad, y_pad} <= {32'b0, abs_x, 1'b0, abs_y};
+                counter <= counter + 6'd1;
         end
     end
 
-    //求解当前迭代的减法结果
-    assign pre_r = r_r - y_pad;                     //未恢复余数的结果
-    assign recover_r = pre_r[32] ? r_r : pre_r;     //恢复余数的结果
-    always @(posedge div_clk) begin
-        if(~resetn) 
-            s_r <= 32'b0;
-        else if(div & ~complete & |counter) begin
-            s_r[32-counter] <= ~pre_r[32];
+    
+    wire [63:0] result_temp;
+    wire [32:0] Y_pad;
+
+    assign X_abs =(32{X_signed}^divisor) + X_signed;
+    assign Y_abs =(32{Y_signed}^dividend) + Y_signed;
+    
+
+    //初始化除数和被除数
+    always @(posedge clk)begin
+        if(!resetn)begin
+            {result_temp,Y_pad}<= {64'b0,33'b0};
+            end
+        else if(div_en)begin
+            if(counter==6'b0)begin
+                {result_temp,Y_pad}<= {32'b0,X_abs,1'b0,Y_abs};
+                end
+            end
+
+    wire [32:0] pre_remainder;
+    wire [32:0] cover_remainder;
+    wire [31:0] sum_remainder;
+    wire [32:0] current_remainder;
+
+    assign pre_remainder   = current_remainder-Y_pad;
+    assign cover_remainder = pre_remainder[32] ? current_remainder:pre_remainder;//恢复余数法
+    always @(posedge clk)begin
+        if(!resetn)begin
+            sum_remainder <= 32'b0;
+        end
+        else if(div_en& ~complete & counter!=6'b0 )begin
+            sum_remainder[32-counter] <= ~pre_remainder[32];
         end
     end
-    always @(posedge div_clk) begin
-        if(~resetn)
-            r_r <= 33'b0;
-        if(div & ~complete) begin
-            if(~|counter)   //余数初始化
-                r_r <= {32'b0, abs_x[31]};
-            else
-                r_r <=  (counter == 32) ? recover_r : {recover_r, x_pad[31 - counter]};
+
+    always @(posedge clk)begin
+        if(!resetn)begin
+            current_remainder <= 33'b0;
+        end
+        if(div_en& ~complete)begin
+            if(~|counter)begin
+            current_remainder <= {32'b0,X_abs[31]};
+            end
+            else begin
+            current_remainder <= (&counter[4:0]) ? cover_remainder:{cover_remainder,result_temp[31-counter]};
+            end
         end
     end
-// 3.调整最终商和余数
-    assign s = div_signed & sign_s ? (~s_r+1'b1) : s_r;
-    assign r = div_signed & sign_r ? (~r_r+1'b1) : r_r;
+
+    assign result[31:0]= sign & sign_s ? (~result_temp + 1) : result_temp;
+    assign result[63:32] = sign & sign_r ? (~current_remainder + 1) : current_remainder;
 endmodule
+
