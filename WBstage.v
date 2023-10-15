@@ -68,8 +68,6 @@ always @(posedge clk) begin
 end
 
 //////////assign//////////
-
-
 assign rf_we = gr_we_reg && ws_valid;
 assign rf_waddr = dest_reg;
 assign rf_wdata = final_result_reg;

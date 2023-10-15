@@ -1,21 +1,23 @@
+`include "BUS_LEN.vh"
 module IFstage (
   input wire clk,
   input wire resetn,
   input wire reset,
-  
-  input wire ds_allowin,
-  output wire fs2ds_valid,
-  
+  //the bus from the IDstage
   input wire [32:0] br_zip,
-  output wire [63:0] fs2ds_bus,
-  
+  output wire [FS2DS_BUS_LEN:0] fs2ds_bus,
+  //the interface with the SRAM
   output wire inst_sram_en,
   output wire [3:0] inst_sram_we,
   output wire [31:0] inst_sram_addr,
   output wire [31:0] inst_sram_wdata,
-  input wire [31:0] inst_sram_rdata
-
+  input wire [31:0] inst_sram_rdata,
+  //the interface between the IFstage and the IDstage
+  output reg fs_valid,
+  input wire ds_allowin,
+  output wire fs2ds_valid
 );
+
 
 
 //////////declaration//////////
@@ -33,8 +35,8 @@ assign {br_taken, br_target} = br_zip;
 assign fs2ds_bus = {fs_pc, inst};
 
 //////////pipeline////////
-wire fs_ready_go;
-wire fs_allowin;
+wire fs_ready_go; // fs���Խ�������
+wire fs_allowin; // fs���Խ���ָ��
 
 assign fs_ready_go = 1'b1;
 assign fs_allowin = ~fs_valid || fs_ready_go && ds_allowin;
@@ -45,13 +47,15 @@ assign fs_pc = pc;
 always @(posedge clk) begin
   if (~resetn) begin
     fs_valid <= 1'b0;
-  end else if (fs_allowin) begin
+  end 
+  else if (fs_allowin) begin
     fs_valid <= resetn;
   end
   
   if (~resetn) begin
     pc <= 32'h1bfffffc; // trick: to make nextpc be 0x1c000000 during reset
-  end else if (resetn && fs_allowin)begin
+  end 
+  else if (resetn & fs_allowin )begin
     pc <= nextpc;
   end
 end
