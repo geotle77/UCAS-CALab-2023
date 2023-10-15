@@ -5,7 +5,7 @@ module alu(
   input  wire [31:0] alu_src1,
   input  wire [31:0] alu_src2,
   output wire [31:0] alu_result,
-  output wire [31:0] alu_flag,
+  output wire [31:0] alu_flag
 );
 
 wire op_add;   //add operation
@@ -20,6 +20,7 @@ wire op_sll;   //logic left shift
 wire op_srl;   //logic right shift
 wire op_sra;   //arithmetic right shift
 wire op_lui;   //Load Upper Immediate
+
 wire op_mul;   //multiply
 wire op_mulh;  //multiply and store high bits
 wire op_mulhu; //unsigned multiply and store high bits
@@ -76,7 +77,7 @@ mul u_mul(
   .x(mul_src1),
   .y(mul_src2),
   .z(mul_result)
-)
+);
 
 
 // 32-bit adder
@@ -159,6 +160,7 @@ always @(posedge clk) begin
   end else begin
     div_data_valid <= 1'b0;
   end
+end
 
   IP_DIV div(
   .aclk                   (clk),
