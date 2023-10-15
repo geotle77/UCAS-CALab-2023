@@ -19,22 +19,18 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-//booth³Ë·¨Æ÷¶¥²ãÄ£¿é
+//boothï¿½Ë·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½
 module booth_multiplier(
     input clk,
     input mul_signed, 
-    input  [31:0] x_origin, //±»³ËÊý
-    input  [31:0] y_origin, //³ËÊý
-    output [63:0] result  //³Ë»ý
+    input  [33:0] x, //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    input  [33:0] y, //ï¿½ï¿½ï¿½ï¿½
+    output [67:0] z  //ï¿½Ë»ï¿½
 );
-wire [33:0] x;
-wire [33:0] y;
-assign x        = {{2{mul_signed & x_origin[31]}} ,x_origin};
-assign y        = {{2{mul_signed & y_origin[31]}} ,y_origin};
 
 
 
-//Éú³É²¿·Ö»ý£¨partial product generator, ppg£©
+//ï¿½ï¿½ï¿½É²ï¿½ï¿½Ö»ï¿½ï¿½ï¿½partial product generator, ppgï¿½ï¿½
 wire [67:0] ppg_p [16:0];
 wire [16:0] ppg_c;
 
@@ -50,7 +46,7 @@ generate
     end
 endgenerate
 
-//»ªÀ³Ê¿Ê÷£¨wallace tree, wt£©
+//ï¿½ï¿½ï¿½ï¿½Ê¿ï¿½ï¿½ï¿½ï¿½wallace tree, wtï¿½ï¿½
 wire [14:0] wt_cio [68:0];
 wire [67:0] wt_c;
 wire [67:0] wt_s;
@@ -171,24 +167,22 @@ endgenerate
 
 
 
-//64Î»¼Ó·¨Æ÷
-wire [67:0] z;
+//64Î»ï¿½Ó·ï¿½ï¿½ï¿½
 assign z = {wt_c_wire[66:0], ppg_c_reg[15]} + wt_s_wire[67:0] + ppg_c_reg[16];
-assign result = z[63:0];
 
 
 
 endmodule
 
 
-//²¿·Ö»ýÉú³ÉÄ£¿é
+//ï¿½ï¿½ï¿½Ö»ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½
 module partial_product_generator #(
     parameter XWIDTH = 68
 )(
-    input  [XWIDTH-1:0] x, //±»³ËÊý
+    input  [XWIDTH-1:0] x, //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     input  [       2:0] y, //y_{i+1}, y_{i}, y_{i-1}
-    output [XWIDTH-1:0] p, //²¿·Ö»ý
-    output              c  //½øÎ»
+    output [XWIDTH-1:0] p, //ï¿½ï¿½ï¿½Ö»ï¿½
+    output              c  //ï¿½ï¿½Î»
 );
 
 wire sn;
@@ -214,13 +208,13 @@ assign c = sn | sn2;
 endmodule
 
 
-//Ò»±ÈÌØÈ«¼ÓÆ÷Ä£¿é
+//Ò»ï¿½ï¿½ï¿½ï¿½È«ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½
 module one_bit_adder(
-    input  a,   //¼ÓÊý
-    input  b,   //±»¼ÓÊý
-    input  c,   //½øÎ»ÊäÈë
-    output s,   //ºÍ
-    output cout //½øÎ»Êä³ö
+    input  a,   //ï¿½ï¿½ï¿½ï¿½
+    input  b,   //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    input  c,   //ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½
+    output s,   //ï¿½ï¿½
+    output cout //ï¿½ï¿½Î»ï¿½ï¿½ï¿½
 );
 
 assign s = ~(~(a&~b&~c) & ~(~a&b&~c) & ~(~a&~b&c) & ~(a&b&c));
@@ -229,13 +223,13 @@ assign cout = a&b | a&c | b&c;
 endmodule
 
 
-//»ªÀ³Ê¿Ê÷Ä£¿é
+//ï¿½ï¿½ï¿½ï¿½Ê¿ï¿½ï¿½Ä£ï¿½ï¿½
 module wallace_tree (
-    input  [16:0] n,    //¼ÓÊý
-    input  [14:0] cin,  //½øÎ»´«µÝÊäÈë
-    output [14:0] cout, //½øÎ»´«µÝÊä³ö
-    output        c,    //½øÎ»Êä³ö
-    output        s     //ºÍ
+    input  [16:0] n,    //ï¿½ï¿½ï¿½ï¿½
+    input  [14:0] cin,  //ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    output [14:0] cout, //ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    output        c,    //ï¿½ï¿½Î»ï¿½ï¿½ï¿½
+    output        s     //ï¿½ï¿½
 );
 
 wire [15:0] adder_a;

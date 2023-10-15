@@ -47,6 +47,8 @@ reg mem_gr_we;
 
 reg res_from_mul_reg;
 
+wire [31:0] mul_result;
+
 //////////pipeline//////////
 wire ms_ready_go;
 
