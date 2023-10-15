@@ -1,21 +1,22 @@
 `timescale 1ns / 1ps
 
+
 //booth乘法器顶层模块
 module booth_multiplier(
-    input  [31:0] x, //被乘数
-    input  [31:0] y, //乘数
-    output [63:0] z  //乘积
+    input  [33:0] x, //被乘数
+    input  [33:0] y, //乘数
+    output [67:0] z  //乘积
 );
 
 //生成部分积（partial product generator, ppg）
-wire [63:0] ppg_p [15:0];
-wire [15:0] ppg_c;
+wire [67:0] ppg_p [16:0];
+wire [16:0] ppg_c;
 
 genvar i;
 generate
-    for (i=0; i<16; i=i+1) begin : ppg_loop
+    for (i=0; i<17; i=i+1) begin : ppg_loop
         partial_product_generator u_ppg(
-            .x({{(32-2*i){x[31]}}, x, {(2*i){1'b0}}}),
+            .x({{(34-2*i){x[33]}}, x, {(2*i){1'b0}}}),
             .y({y[2*i+1], y[2*i], i==0?1'b0:y[2*i-1]}),
             .p(ppg_p[i]),
             .c(ppg_c[i])
@@ -24,17 +25,18 @@ generate
 endgenerate
 
 //华莱士树（wallace tree, wt）
-wire [13:0] wt_cio [64:0];
-wire [63:0] wt_c;
-wire [63:0] wt_s;
+wire [14:0] wt_cio [68:0];
+wire [67:0] wt_c;
+wire [67:0] wt_s;
 
-assign wt_cio[0] = ppg_c[13:0];
+assign wt_cio[0] = ppg_c[14:0];
 
 genvar j;
 generate
-    for (j=0; j<64; j=j+1) begin : wt_loop
+    for (j=0; j<68; j=j+1) begin : wt_loop
         wallace_tree u_wt(
             .n      ({
+                        ppg_p[16][j],
                         ppg_p[15][j], ppg_p[14][j], ppg_p[13][j], ppg_p[12][j], 
                         ppg_p[11][j], ppg_p[10][j], ppg_p[ 9][j], ppg_p[ 8][j], 
                         ppg_p[ 7][j], ppg_p[ 6][j], ppg_p[ 5][j], ppg_p[ 4][j], 
@@ -50,14 +52,14 @@ generate
 endgenerate
 
 //64位加法器
-assign z = {wt_c[62:0], ppg_c[14]} + wt_s[63:0] + ppg_c[15];
+assign z = {wt_c[66:0], ppg_c[15]} + wt_s[67:0] + ppg_c[16];
 
 endmodule
 
 
 //部分积生成模块
 module partial_product_generator #(
-    parameter XWIDTH = 64
+    parameter XWIDTH = 68
 )(
     input  [XWIDTH-1:0] x, //被乘数
     input  [       2:0] y, //y_{i+1}, y_{i}, y_{i-1}
@@ -89,7 +91,7 @@ endmodule
 
 
 //一比特全加器模块
-module Full_Adder(
+module one_bit_adder(
     input  a,   //加数
     input  b,   //被加数
     input  c,   //进位输入
@@ -102,24 +104,25 @@ assign cout = a&b | a&c | b&c;
 
 endmodule
 
+
 //华莱士树模块
 module wallace_tree(
-    input  [15:0] n,    //加数
-    input  [13:0] cin,  //进位传递输入
-    output [13:0] cout, //进位传递输出
+    input  [16:0] n,    //加数
+    input  [14:0] cin,  //进位传递输入
+    output [14:0] cout, //进位传递输出
     output        c,    //进位输出
     output        s     //和
 );
 
-wire [14:0] adder_a;
-wire [14:0] adder_b;
-wire [14:0] adder_c;
-wire [14:0] adder_s;
-wire [14:0] adder_cout;
+wire [15:0] adder_a;
+wire [15:0] adder_b;
+wire [15:0] adder_c;
+wire [15:0] adder_s;
+wire [15:0] adder_cout;
 genvar i;
 generate
-    for (i=0; i<15; i=i+1) begin : adder_loop
-        Full_Adder u_adder(
+    for (i=0; i<16; i=i+1) begin : adder_loop
+        one_bit_adder u_adder(
             .a(adder_a[i]),
             .b(adder_b[i]),
             .c(adder_c[i]),
@@ -130,38 +133,38 @@ generate
 endgenerate
 
 // level 1
-wire [10:0] l1;
-assign {adder_a[4:0], adder_b[4:0], adder_c[4:0]} = n[14:0];
-assign cout[4:0] = adder_cout[4:0];
-assign l1 = {adder_s[4:0], n[15], cin[4:0]};
+wire [11:0] l1;
+assign {adder_a[5:0], adder_b[5:0], adder_c[5:0]} = {n[16:0], 1'b0};
+assign cout[5:0] = adder_cout[5:0];
+assign l1 = {adder_s[5:0], cin[5:0]};
 
 // level 2
 wire [7:0] l2;
-assign {adder_a[8:5], adder_b[8:5], adder_c[8:5]} = {l1[10:0], 1'b0};
-assign cout[8:5] = adder_cout[8:5];
-assign l2 = {adder_s[8:5], cin[8:5]};
+assign {adder_a[9:6], adder_b[9:6], adder_c[9:6]} = {l1[11:0]};
+assign cout[9:6] = adder_cout[9:6];
+assign l2 = {adder_s[9:6], cin[9:6]};
 
 // level 3
 wire [5:0] l3;
-assign {adder_a[10:9], adder_b[10:9], adder_c[10:9]} = l2[5:0];
-assign cout[10:9] = adder_cout[10:9];
-assign l3 = {adder_s[10:9], l2[7:6], cin[10:9]};
+assign {adder_a[11:10], adder_b[11:10], adder_c[11:10]} = l2[5:0];
+assign cout[11:10] = adder_cout[11:10];
+assign l3 = {adder_s[11:10], l2[7:6], cin[11:10]};
 
 // level 4
 wire [3:0] l4;
-assign {adder_a[12:11], adder_b[12:11], adder_c[12:11]} = l3[5:0];
-assign cout[12:11] = adder_cout[12:11];
-assign l4 = {adder_s[12:11], cin[12:11]};
+assign {adder_a[13:12], adder_b[13:12], adder_c[13:12]} = l3[5:0];
+assign cout[13:12] = adder_cout[13:12];
+assign l4 = {adder_s[13:12], cin[13:12]};
 
 // level 5
 wire [2:0] l5;
-assign {adder_a[13], adder_b[13], adder_c[13]} = l4[2:0];
-assign cout[13] = adder_cout[13];
-assign l5 = {adder_s[13], l4[3], cin[13]};
+assign {adder_a[14], adder_b[14], adder_c[14]} = l4[2:0];
+assign cout[14] = adder_cout[14];
+assign l5 = {adder_s[14], l4[3], cin[14]};
 
 // level 6
-assign {adder_a[14], adder_b[14], adder_c[14]} = l5[2:0];
-assign c = adder_cout[14];
-assign s = adder_s[14];
+assign {adder_a[15], adder_b[15], adder_c[15]} = l5[2:0];
+assign c = adder_cout[15];
+assign s = adder_s[15];
 
 endmodule
