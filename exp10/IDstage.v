@@ -120,7 +120,18 @@ wire inst_div_wu;
 wire inst_mod_w;
 wire inst_mod_wu;
 
+wire inst_sltui;
+wire inst_slti;
+wire inst_andi;
+wire inst_ori;
+wire xori;
+wire inst_sll_w;
+wire inst_srl_w;
+wire inst_sra_w;
+wire inst_pcaddu12i;
+
 wire need_ui5;
+wire need_ui12;
 wire need_si12;
 wire need_si16;
 wire need_si20;
@@ -158,9 +169,6 @@ always @(posedge clk) begin
     inst_reg <= inst;
   end
 end
-
-
-//////////assign//////////
 
 
 
@@ -314,7 +322,7 @@ regfile u_regfile(
 //assign rkd_value = rf_rdata2;
 
 assign rj_value = 
-    (exe_rf_we && exe_dest == rf_raddr1)? alu_result :////
+    (exe_rf_we && exe_dest == rf_raddr1)? alu_result :
     (mem_rf_we && mem_dest == rf_raddr1)? final_result :
     (rf_we  && dest_reg   == rf_raddr1)? rf_wdata   :
     rf_rdata1;
