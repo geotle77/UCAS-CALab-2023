@@ -25,7 +25,7 @@ module booth_multiplier(
     input mul_signed, 
     input  [31:0] x_origin, //被乘数
     input  [31:0] y_origin, //乘数
-    output reg [63:0] result  //乘积
+    output [63:0] result  //乘积
 );
 wire [33:0] x;
 wire [33:0] y;
@@ -59,7 +59,7 @@ assign wt_cio[0] = ppg_c[14:0];
 
 genvar j;
 generate
-    for (j=0; j<68; j=j+1) begin : wt_loop
+    for (j=0; j<34; j=j+1) begin : wt_loop_1
         wallace_tree u_wt(
             .n      ({
                         ppg_p[16][j],
@@ -77,16 +77,106 @@ generate
     end
 endgenerate
 
+
+//////////pipeling start//////////
+
+reg [14:0] wt_cio_reg [68:0];
+reg [67:0] wt_c_reg;
+reg [67:0] wt_s_reg;
+
+genvar q;
+generate 
+    for (q=0; q<=68; q=q+1) begin : cio_loop_2
+        always @(posedge clk) begin
+            wt_cio_reg[q] <= wt_cio[q];
+        end
+    end
+endgenerate
+always @(posedge clk) begin
+    wt_c_reg <= wt_c;
+    wt_s_reg <= wt_s;
+end
+
+
+wire [14:0] wt_cio_wire [68:0];
+wire [67:0] wt_c_wire;
+wire [67:0] wt_s_wire;
+
+genvar p;
+generate 
+    for (p=0; p<=68; p=p+1) begin : cio_loop_1
+        assign wt_cio_wire[p] = wt_cio_reg[p];
+    end
+endgenerate
+assign wt_c_wire = wt_c_reg;
+assign wt_s_wire = wt_s_reg;
+
+
+
+reg [16:0] ppg_c_reg;
+reg [67:0] ppg_p_reg [16:0];
+
+always @(posedge clk) begin
+    ppg_c_reg <= ppg_c;
+end
+
+genvar t;
+generate 
+    for (t=0; t<=17; t=t+1) begin : ppg_p_loop_1
+        always @(posedge clk) begin
+            ppg_p_reg[t] <= ppg_p[t];
+        end
+    end
+endgenerate
+
+wire [67:0] ppg_p_wire [16:0];
+
+genvar s;
+generate 
+    for (s=0; s<=17; s=s+1) begin : ppg_p_loop_2
+        assign ppg_p_wire[s] = ppg_p_reg[s];
+    end
+endgenerate
+
+
+
+
+//////////pipeling end//////////
+
+
+
+
+genvar k;
+generate
+    for (k=34; k<68; k=k+1) begin : wt_loop_2
+        wallace_tree u_wt(
+            .n      ({
+                        ppg_p_wire[16][k],
+                        ppg_p_wire[15][k], ppg_p_wire[14][k], ppg_p_wire[13][k], ppg_p_wire[12][k], 
+                        ppg_p_wire[11][k], ppg_p_wire[10][k], ppg_p_wire[ 9][k], ppg_p_wire[ 8][k], 
+                        ppg_p_wire[ 7][k], ppg_p_wire[ 6][k], ppg_p_wire[ 5][k], ppg_p_wire[ 4][k], 
+                        ppg_p_wire[ 3][k], ppg_p_wire[ 2][k], ppg_p_wire[ 1][k], ppg_p_wire[ 0][k]
+                    }),
+            .cin    (wt_cio_wire[k]),
+            .cout   (wt_cio_wire[k+1]),
+            .c      (wt_c_wire[k]),
+            .s      (wt_s_wire[k])
+        );
+        
+    end
+endgenerate
+
+
+
+
+
+
 //64位加法器
 wire [67:0] z;
-assign z = {wt_c[66:0], ppg_c[15]} + wt_s[67:0] + ppg_c[16];
-assign result_origin = z[63:0];
+assign z = {wt_c_wire[66:0], ppg_c_reg[15]} + wt_s_wire[67:0] + ppg_c_reg[16];
+assign result = z[63:0];
 
-//////////pipeline test//////////
-wire [63:0] result_origin;
-always @(posedge clk) begin
-    result <= result_origin;
-end
+
 
 endmodule
 
@@ -140,7 +230,7 @@ endmodule
 
 
 //华莱士树模块
-module wallace_tree(
+module wallace_tree (
     input  [16:0] n,    //加数
     input  [14:0] cin,  //进位传递输入
     output [14:0] cout, //进位传递输出
