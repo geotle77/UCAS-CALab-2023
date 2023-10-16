@@ -22,7 +22,10 @@ module EXEstage (
   
   output wire exe_rf_we,
   output reg es_inst_is_ld_w,
-  input wire inst_ld_w
+  input wire inst_ld_w,
+  
+  input wire res_from_mul,
+  output reg exe_res_from_mul
 );
 
 
@@ -80,6 +83,8 @@ always @(posedge clk) begin
     exe_gr_we         <= gr_we;
     exe_dest          <= dest;
     mem_we_reg <= mem_we;
+    
+    exe_res_from_mul <= res_from_mul;
   end
 end
 
