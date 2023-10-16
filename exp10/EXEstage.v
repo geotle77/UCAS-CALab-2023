@@ -22,11 +22,12 @@ module EXEstage (
   output wire [31:0] alu_result,
   
   output wire exe_rf_we,
-  output reg es_inst_is_ld_w,
-  input wire inst_ld_w,
+  output reg es_block,//es_inst_is_ld_w,
+  input wire block,//inst_ld_w,
   
   input wire res_from_mul,
-  output reg exe_res_from_mul
+  output reg exe_res_from_mul,
+  output [67:0] mul_result
 );
 
 
@@ -34,7 +35,7 @@ module EXEstage (
 wire [31:0] ds_pc;
 wire [31:0] alu_src1;
 wire [31:0] alu_src2;
-wire [11:0] alu_op;
+wire [18:0] alu_op;
 wire [31:0] rkd_value;
 wire res_from_mem;
 wire gr_we;
@@ -55,7 +56,7 @@ reg exe_gr_we;
 reg        mem_we_reg;
 reg [31:0] alu_src1_reg;
 reg [31:0] alu_src2_reg;
-reg [11:0] alu_op_reg;
+reg [18:0] alu_op_reg;
 reg [31:0] rkd_value_reg;
 
 
@@ -92,11 +93,11 @@ end
 
 always @(posedge clk)begin
     if(ds2es_valid && es_allowin)begin
-        if(inst_ld_w)begin
-            es_inst_is_ld_w <= 1'b1;
+        if(block)begin
+            es_block <= 1'b1;
         end
         else begin
-            es_inst_is_ld_w <= 1'b0;
+            es_block <= 1'b0;
         end
     end
 end
@@ -120,6 +121,28 @@ assign data_sram_en    = mem_we_reg || exe_res_from_mem;//1'b1;
 assign data_sram_we    = {4{mem_we_reg && es_valid}};
 assign data_sram_addr  = alu_result;
 assign data_sram_wdata = rkd_value_reg;
+
+
+
+
+
+//mul_src
+wire  [33:0]  mul_src1;
+wire  [33:0]  mul_src2;
+wire  [67:0]  z;
+assign mul_src1 = {{2{alu_src1[31] & ~alu_op[14]}}, alu_src1[31:0]};
+assign mul_src2 = {{2{alu_src2[31] & ~alu_op[14]}}, alu_src2[31:0]};
+
+booth_multiplier u_mul(
+  .clk(clk),
+  .mul_signed(alu_op[12] | alu_op[13]),
+  .x(mul_src1),
+  .y(mul_src2),
+  .z(z)
+);
+
+assign mul_result =   ({32{alu_op[12]           }} & z[31:0])
+                    | ({32{alu_op[13]|alu_op[14]}} & z[63:32]);
 
 
 endmodule

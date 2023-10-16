@@ -16,7 +16,8 @@ module MEMstage (
   output reg [4:0] mem_dest,
   output wire [31:0] final_result,
   
-  input wire exe_res_from_mul
+  input wire exe_res_from_mul,
+  input [67:0] mul_result
 );
 
 
@@ -79,11 +80,8 @@ assign mem_rf_we = ms_valid && mem_gr_we;
 assign mem_result = data_sram_rdata;
 assign mul_result = alu_result;
 assign final_result = mem_res_from_mem ? mem_result : 
-                      res_from_mul_reg? alu_result :
-                                        mem_alu_result ;
+                      res_from_mul_reg?  mul_result :
+                                         mem_alu_result ;
                       
 
 endmodule
-
-//////////others//////////
-

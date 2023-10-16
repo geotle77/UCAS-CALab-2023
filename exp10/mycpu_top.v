@@ -47,6 +47,7 @@ wire es2ms_valid;
 wire ms2ws_valid;
 
 
+
 wire mem_rf_we;
 wire [4:0] mem_dest;
 wire exe_rf_we;
@@ -55,8 +56,10 @@ wire [4:0] dest_reg;
 wire [31:0] alu_result;
 wire [31:0] final_result;
 
-wire es_inst_is_ld_w;
-wire inst_ld_w;
+wire res_from_mul;
+wire exe_res_from_mul;
+wire es_block;//es_inst_is_ld_w;
+wire block;//inst_ld_w;
 
 wire [32:0] br_zip;
 wire [37:0] rf_zip;
@@ -65,6 +68,8 @@ wire [`FS2DS_BUS_LEN-1:0]   fs2ds_bus;
 wire [`DS2ES_BUS_LEN-1:0]   ds2es_bus;
 wire [`ES2MS_BUS_LEN-1:0]   es2ms_bus;
 wire [`MS2WS_BUS_LEN-1:0]   ms2ws_bus;
+
+wire [67:0] mul_result;
 
 
 
@@ -110,8 +115,9 @@ IDstage my_id (
   .alu_result(alu_result),
   .final_result(final_result),
   
-  .es_inst_is_ld_w(es_inst_is_ld_w),
-  .inst_ld_w(inst_ld_w)
+  .res_from_mul(res_from_mul),
+  .es_block(es_block),
+  .block(block)
 );
 
 EXEstage my_exe (
@@ -136,8 +142,11 @@ EXEstage my_exe (
   .exe_dest(exe_dest),
   .alu_result(alu_result),
 
-  .es_inst_is_ld_w(es_inst_is_ld_w),
-  .inst_ld_w(inst_ld_w)
+  .res_from_mul(res_from_mul),
+  .exe_res_from_mul(exe_res_from_mul),
+  .es_block(es_block),
+  .block(block),
+  .mul_result(mul_result)
 );
 
 MEMstage my_mem (
@@ -154,9 +163,11 @@ MEMstage my_mem (
   .es2ms_bus(es2ms_bus),
   .ms2ws_bus(ms2ws_bus),
   
+  .exe_res_from_mul(exe_res_from_mul),
   .mem_rf_we(mem_rf_we),
   .mem_dest(mem_dest),
-  .final_result(final_result)
+  .final_result(final_result),
+  .mul_result(mul_result)
 );
 
 WBstage my_wb (

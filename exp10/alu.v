@@ -1,11 +1,11 @@
 module alu(
   input clk,
   input resetn,
-  input  wire [11:0] alu_op,
+  input  wire [18:0] alu_op,
   input  wire [31:0] alu_src1,
   input  wire [31:0] alu_src2,
   output wire [31:0] alu_result,
-  output wire [31:0] alu_flag
+  output wire        alu_flag
 );
 
 wire op_add;   //add operation
@@ -21,9 +21,9 @@ wire op_srl;   //logic right shift
 wire op_sra;   //arithmetic right shift
 wire op_lui;   //Load Upper Immediate
 
-wire op_mul;   //multiply
-wire op_mulh;  //multiply and store high bits
-wire op_mulhu; //unsigned multiply and store high bits
+//wire op_mul;   //multiply
+//wire op_mulh;  //multiply and store high bits
+//wire op_mulhu; //unsigned multiply and store high bits
 wire op_div;   //divide
 wire op_divu;  //unsigned divide
 wire op_mod;   //mod 
@@ -43,9 +43,9 @@ assign op_sll  = alu_op[ 8];
 assign op_srl  = alu_op[ 9];
 assign op_sra  = alu_op[10];
 assign op_lui  = alu_op[11];
-assign op_mul  = alu_op[12];
-assign op_mulh = alu_op[13];
-assign op_mulhu= alu_op[14];
+//assign op_mul  = alu_op[12];
+//assign op_mulh = alu_op[13];
+//assign op_mulhu= alu_op[14];
 assign op_div  = alu_op[15];
 assign op_divu = alu_op[16];
 assign op_mod  = alu_op[17];
@@ -62,33 +62,11 @@ wire [31:0] lui_result;
 wire [31:0] sll_result;
 wire [63:0] sr64_result;
 wire [31:0] sr_result;
-wire [67:0] mul_result;
+//wire [67:0] mul_result;
 wire [63:0] div_result;
 wire [63:0] divu_result;
 
-//mul_src
-wire  [32:0]  mul_src1;
-wire  [32:0]  mul_src2;
-assign mul_src1 = {{2{alu_src1[31] & ~op_mulhu}}, alu_src1[31:0]};
-assign mul_src2 = {{2{alu_src2[31] & ~op_mulhu}}, alu_src2[31:0]};
 
-assign mul_en = op_mul | op_mulh | op_mulhu;
-booth_multiplier u_mul(
-  .clk(clk),
-  .mul_signed(op_mulh|op_mul),
-  .x(mul_src1),
-  .y(mul_src2),
-  .z(mul_result)
-);
-reg mul_finish;
-always @(posedge clk) begin
-  if(~resetn)
-    mul_finish <= 1'b0;
-  else if(mul_en & ~mul_finish)
-    mul_finish <= 1'b1;
-  else
-    mul_finish <= 1'b0;
-end
 
 // 32-bit adder
 wire [31:0] adder_a;
@@ -149,7 +127,7 @@ assign div_en = op_mod | op_modu | op_div | op_divu;
 assign div_finish = signed_div & div_out_valid | unsigned_div & divu_out_valid | ~signed_div & ~unsigned_div;
 
 always @(posedge clk) begin
-if(resetn) begin
+if(!resetn) begin
     div_block <= 1'b0;
   end else if(div_out_valid | divu_out_valid) begin
     div_block <= 1'b0;
@@ -168,11 +146,11 @@ if(resetn) begin
   end
   
   if(div_block) begin
-    div_data_valid <= 1'b0;
+    divu_data_valid <= 1'b0;
   end else if(unsigned_div & ~u_divisor_tready & ~u_dividend_tready ) begin
-    div_data_valid <= 1'b1;
+    divu_data_valid <= 1'b1;
   end else begin
-    div_data_valid <= 1'b0;
+    divu_data_valid <= 1'b0;
   end
 end
 
@@ -200,9 +178,6 @@ IP_DIV_U divu(
   .m_axis_dout_tvalid     (divu_out_valid)
 );
 
-
-
-
 // final result mux
 assign alu_result = ({32{op_add|op_sub   }} & add_sub_result)
                   | ({32{op_slt          }} & slt_result)
@@ -214,12 +189,12 @@ assign alu_result = ({32{op_add|op_sub   }} & add_sub_result)
                   | ({32{op_lui          }} & lui_result)
                   | ({32{op_sll          }} & sll_result)
                   | ({32{op_srl|op_sra   }} & sr_result)
-                  | ({32{op_mul          }} & mul_result[31:0])
-                  | ({32{op_mulh|op_mulhu}} & mul_result[63:32])
+                  //| ({32{op_mul          }} & mul_result[31:0])
+                  //| ({32{op_mulh|op_mulhu}} & mul_result[63:32])
                   | ({32{op_div          }} & div_result[63:32])
                   | ({32{op_divu         }} & divu_result[63:32])
                   | ({32{op_mod          }} & div_result[31:0])
                   | ({32{op_modu         }} & divu_result[31:0]);
 
-assign alu_flag = ~resetn | div_finish & div_en | mul_finish & mul_en | ~div_en & ~mul_en;
+assign alu_flag = ~resetn | div_finish & div_en /*| mul_finish & mul_en*/ | ~div_en /*& ~mul_en*/;
 endmodule

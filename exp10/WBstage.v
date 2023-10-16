@@ -41,8 +41,6 @@ assign {ms_pc, mem_gr_we, mem_dest, final_result} = ms2ws_bus;
 
 
 reg [31:0] ws_pc;
-reg [31:0] alu_result_reg;
-reg [31:0] res_from_mem_reg;
 reg [31:0] final_result_reg;
 
 //////////pipeline//////////
