@@ -62,18 +62,18 @@ wire [31:0] lui_result;
 wire [31:0] sll_result;
 wire [63:0] sr64_result;
 wire [31:0] sr_result;
-wire [65:0] mul_result;
+wire [67:0] mul_result;
 wire [63:0] div_result;
 wire [63:0] divu_result;
 
 //mul_src
 wire  [32:0]  mul_src1;
 wire  [32:0]  mul_src2;
-wire mul_complete;
-assign mul_src1 = {alu_src1[31] & ~op_mulhu, alu_src1[31:0]};
-assign mul_src2 = {alu_src2[31] & ~op_mulhu, alu_src2[31:0]};
+assign mul_src1 = {{2{alu_src1[31] & ~op_mulhu}}, alu_src1[31:0]};
+assign mul_src2 = {{2{alu_src2[31] & ~op_mulhu}}, alu_src2[31:0]};
 
-mul u_mul(
+booth_multiplier u_mul(
+  .clk(clk),
   .x(mul_src1),
   .y(mul_src2),
   .z(mul_result)

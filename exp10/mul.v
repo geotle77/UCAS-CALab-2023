@@ -1,14 +1,36 @@
 `timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 2022/09/09 21:48:58
+// Design Name: 
+// Module Name: booth_multiplier
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
 
-
-//booth乘法器顶层模块
+//booth�˷�������ģ��
 module booth_multiplier(
-    input  [33:0] x, //被乘数
-    input  [33:0] y, //乘数
-    output [67:0] z  //乘积
+    input clk,
+    input mul_signed, 
+    input  [33:0] x, //������
+    input  [33:0] y, //����
+    output [67:0] z  //�˻�
 );
 
-//生成部分积（partial product generator, ppg）
+
+
+//���ɲ��ֻ���partial product generator, ppg��
 wire [67:0] ppg_p [16:0];
 wire [16:0] ppg_c;
 
@@ -24,7 +46,7 @@ generate
     end
 endgenerate
 
-//华莱士树（wallace tree, wt）
+//����ʿ����wallace tree, wt��
 wire [14:0] wt_cio [68:0];
 wire [67:0] wt_c;
 wire [67:0] wt_s;
@@ -33,7 +55,7 @@ assign wt_cio[0] = ppg_c[14:0];
 
 genvar j;
 generate
-    for (j=0; j<68; j=j+1) begin : wt_loop
+    for (j=0; j<34; j=j+1) begin : wt_loop_1
         wallace_tree u_wt(
             .n      ({
                         ppg_p[16][j],
@@ -51,20 +73,116 @@ generate
     end
 endgenerate
 
-//64位加法器
-assign z = {wt_c[66:0], ppg_c[15]} + wt_s[67:0] + ppg_c[16];
+
+//////////pipeling start//////////
+
+reg [14:0] wt_cio_reg [68:0];
+reg [67:0] wt_c_reg;
+reg [67:0] wt_s_reg;
+
+genvar q;
+generate 
+    for (q=0; q<=68; q=q+1) begin : cio_loop_2
+        always @(posedge clk) begin
+            wt_cio_reg[q] <= wt_cio[q];
+        end
+    end
+endgenerate
+always @(posedge clk) begin
+    wt_c_reg <= wt_c;
+    wt_s_reg <= wt_s;
+end
+
+
+wire [14:0] wt_cio_wire [68:0];
+wire [67:0] wt_c_wire;
+wire [67:0] wt_s_wire;
+
+genvar p;
+generate 
+    for (p=0; p<=68; p=p+1) begin : cio_loop_1
+        assign wt_cio_wire[p] = wt_cio_reg[p];
+    end
+endgenerate
+assign wt_c_wire = wt_c_reg;
+assign wt_s_wire = wt_s_reg;
+
+
+
+reg [16:0] ppg_c_reg;
+reg [67:0] ppg_p_reg [16:0];
+
+always @(posedge clk) begin
+    ppg_c_reg <= ppg_c;
+end
+
+genvar t;
+generate 
+    for (t=0; t<=17; t=t+1) begin : ppg_p_loop_1
+        always @(posedge clk) begin
+            ppg_p_reg[t] <= ppg_p[t];
+        end
+    end
+endgenerate
+
+wire [67:0] ppg_p_wire [16:0];
+
+genvar s;
+generate 
+    for (s=0; s<=17; s=s+1) begin : ppg_p_loop_2
+        assign ppg_p_wire[s] = ppg_p_reg[s];
+    end
+endgenerate
+
+
+
+
+//////////pipeling end//////////
+
+
+
+
+genvar k;
+generate
+    for (k=34; k<68; k=k+1) begin : wt_loop_2
+        wallace_tree u_wt(
+            .n      ({
+                        ppg_p_wire[16][k],
+                        ppg_p_wire[15][k], ppg_p_wire[14][k], ppg_p_wire[13][k], ppg_p_wire[12][k], 
+                        ppg_p_wire[11][k], ppg_p_wire[10][k], ppg_p_wire[ 9][k], ppg_p_wire[ 8][k], 
+                        ppg_p_wire[ 7][k], ppg_p_wire[ 6][k], ppg_p_wire[ 5][k], ppg_p_wire[ 4][k], 
+                        ppg_p_wire[ 3][k], ppg_p_wire[ 2][k], ppg_p_wire[ 1][k], ppg_p_wire[ 0][k]
+                    }),
+            .cin    (wt_cio_wire[k]),
+            .cout   (wt_cio_wire[k+1]),
+            .c      (wt_c_wire[k]),
+            .s      (wt_s_wire[k])
+        );
+        
+    end
+endgenerate
+
+
+
+
+
+
+//64λ�ӷ���
+assign z = {wt_c_wire[66:0], ppg_c_reg[15]} + wt_s_wire[67:0] + ppg_c_reg[16];
+
+
 
 endmodule
 
 
-//部分积生成模块
+//���ֻ�����ģ��
 module partial_product_generator #(
     parameter XWIDTH = 68
 )(
-    input  [XWIDTH-1:0] x, //被乘数
+    input  [XWIDTH-1:0] x, //������
     input  [       2:0] y, //y_{i+1}, y_{i}, y_{i-1}
-    output [XWIDTH-1:0] p, //部分积
-    output              c  //进位
+    output [XWIDTH-1:0] p, //���ֻ�
+    output              c  //��λ
 );
 
 wire sn;
@@ -90,13 +208,13 @@ assign c = sn | sn2;
 endmodule
 
 
-//一比特全加器模块
+//һ����ȫ����ģ��
 module one_bit_adder(
-    input  a,   //加数
-    input  b,   //被加数
-    input  c,   //进位输入
-    output s,   //和
-    output cout //进位输出
+    input  a,   //����
+    input  b,   //������
+    input  c,   //��λ����
+    output s,   //��
+    output cout //��λ���
 );
 
 assign s = ~(~(a&~b&~c) & ~(~a&b&~c) & ~(~a&~b&c) & ~(a&b&c));
@@ -105,13 +223,13 @@ assign cout = a&b | a&c | b&c;
 endmodule
 
 
-//华莱士树模块
-module wallace_tree(
-    input  [16:0] n,    //加数
-    input  [14:0] cin,  //进位传递输入
-    output [14:0] cout, //进位传递输出
-    output        c,    //进位输出
-    output        s     //和
+//����ʿ��ģ��
+module wallace_tree (
+    input  [16:0] n,    //����
+    input  [14:0] cin,  //��λ��������
+    output [14:0] cout, //��λ�������
+    output        c,    //��λ���
+    output        s     //��
 );
 
 wire [15:0] adder_a;
