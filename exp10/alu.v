@@ -72,13 +72,23 @@ wire  [32:0]  mul_src2;
 assign mul_src1 = {{2{alu_src1[31] & ~op_mulhu}}, alu_src1[31:0]};
 assign mul_src2 = {{2{alu_src2[31] & ~op_mulhu}}, alu_src2[31:0]};
 
+assign mul_en = op_mul | op_mulh | op_mulhu;
 booth_multiplier u_mul(
   .clk(clk),
+  .mul_signed(op_mulh|op_mul),
   .x(mul_src1),
   .y(mul_src2),
   .z(mul_result)
 );
-
+reg mul_finish;
+always @(posedge clk) begin
+  if(~resetn)
+    mul_finish <= 1'b0;
+  else if(mul_en & ~mul_finish)
+    mul_finish <= 1'b1;
+  else
+    mul_finish <= 1'b0;
+end
 
 // 32-bit adder
 wire [31:0] adder_a;
@@ -120,6 +130,8 @@ assign sr64_result = {{32{op_sra & alu_src1[31]}}, alu_src1[31:0]} >> alu_src2[4
 assign sr_result   = sr64_result[31:0];
 
 //div
+
+wire div_en;
 reg  div_data_valid;
 reg  divu_data_valid;
 wire divisor_tready;
@@ -133,21 +145,23 @@ reg  div_block;
 wire signed_div = op_div | op_mod;
 wire unsigned_div = op_divu| op_modu;
 
+assign div_en = op_mod | op_modu | op_div | op_divu;
 assign div_finish = signed_div & div_out_valid | unsigned_div & divu_out_valid | ~signed_div & ~unsigned_div;
 
+always @(posedge clk) begin
 if(resetn) begin
     div_block <= 1'b0;
   end else if(div_out_valid | divu_out_valid) begin
     div_block <= 1'b0;
   end else if(div_data_valid & divisor_tready & dividend_tready | 
-              divu_data_valid & u_divisor_tready & u_dividend_data_ready) begin
+              divu_data_valid & u_divisor_tready & u_dividend_tready) begin
     div_block <= 1'b1;
   end
 
-always @(posedge clk) begin
+
   if(div_block) begin
     div_data_valid <= 1'b0;
-  end else if(need_div & ~divisor_tready & ~dividend_tready ) begin
+  end else if(signed_div & ~divisor_tready & ~dividend_tready ) begin
     div_data_valid <= 1'b1;
   end else begin
     div_data_valid <= 1'b0;
@@ -155,7 +169,7 @@ always @(posedge clk) begin
   
   if(div_block) begin
     div_data_valid <= 1'b0;
-  end else if(need_divu & ~u_divisor_tready & ~u_dividend_tready ) begin
+  end else if(unsigned_div & ~u_divisor_tready & ~u_dividend_tready ) begin
     div_data_valid <= 1'b1;
   end else begin
     div_data_valid <= 1'b0;
@@ -188,6 +202,7 @@ IP_DIV_U divu(
 
 
 
+
 // final result mux
 assign alu_result = ({32{op_add|op_sub   }} & add_sub_result)
                   | ({32{op_slt          }} & slt_result)
@@ -205,4 +220,6 @@ assign alu_result = ({32{op_add|op_sub   }} & add_sub_result)
                   | ({32{op_divu         }} & divu_result[63:32])
                   | ({32{op_mod          }} & div_result[31:0])
                   | ({32{op_modu         }} & divu_result[31:0]);
+
+assign alu_flag = ~resetn | div_finish & div_en | mul_finish & mul_en | ~div_en & ~mul_en;
 endmodule

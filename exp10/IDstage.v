@@ -10,9 +10,9 @@ module IDstage (
   output wire ds2es_valid,
   
   output wire [32:0] br_zip,
-  input wire [WB_RF_BUS:0] rf_zip,
-  output wire[DS2ES_BUS_LEN-1:0] ds2es_bus,
-  input wire [FS2DS_BUS_LEN:0] fs2ds_bus,
+  input wire [`WB_RF_BUS-1:0] rf_zip,
+  output wire[`DS2ES_BUS_LEN-1:0] ds2es_bus,
+  input wire [`FS2DS_BUS_LEN-1:0] fs2ds_bus,
 
   input wire exe_rf_we,
   input wire mem_rf_we,
@@ -23,7 +23,9 @@ module IDstage (
   input wire [31:0] final_result,
   
   input wire es_inst_is_ld_w,
-  output wire inst_ld_w
+  output wire inst_ld_w,
+  
+  output wire res_from_mul
 );
 
 //////////zip//////////
@@ -145,6 +147,7 @@ wire [31:0] rf_rdata2;
 
 reg [31:0] inst_reg;
 
+wire res_from_mul;
 
 
 //////////pipeline//////////
@@ -214,7 +217,7 @@ assign inst_bne    = op_31_26_d[6'h17];
 assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst_reg[25];
 
 //additional instruction!
-assign inst_pcaddul2i = op_31_26_d[6'h07] & ~ds_inst[25];
+assign inst_pcaddul2i = op_31_26_d[6'h07] & ~inst[25];
 
 //shift inst
 assign inst_sll_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0e];
@@ -297,13 +300,15 @@ assign src2_is_imm   = inst_slli_w |
                        inst_xori   |
                        inst_slti   |
                        inst_sltui;
-                       ;
 
 assign res_from_mem  = inst_ld_w;
 assign dst_is_r1     = inst_bl;
 assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b;
 assign mem_we        = inst_st_w;
 assign dest          = dst_is_r1 ? 5'd1 : rd;
+
+
+assign res_from_mul = inst_mul_w || inst_mulh_w || inst_mulh_wu;
 
 assign rf_raddr1 = rj;
 assign rf_raddr2 = src_reg_is_rd ? rd :rk;

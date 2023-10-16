@@ -61,10 +61,10 @@ wire inst_ld_w;
 wire [32:0] br_zip;
 wire [37:0] rf_zip;
 
-wire [FS2DS_BUS_LEN-1:0]   fs2ds_bus;
-wire [DS2ES_BUS_LEN-1:0]   ds2es_bus;
-wire [ES2MS_BUS_LEN-1:0]   es2ms_bus;
-wire [MS2WS_BUS_LEN-1:0]   ms2ws_bus;
+wire [`FS2DS_BUS_LEN-1:0]   fs2ds_bus;
+wire [`DS2ES_BUS_LEN-1:0]   ds2es_bus;
+wire [`ES2MS_BUS_LEN-1:0]   es2ms_bus;
+wire [`MS2WS_BUS_LEN-1:0]   ms2ws_bus;
 
 
 

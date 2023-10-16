@@ -1,3 +1,4 @@
+`include "BUS_LEN.vh"
 module EXEstage (
   input wire clk,
   input wire resetn,
@@ -8,8 +9,8 @@ module EXEstage (
   input wire ds2es_valid,
   output wire es2ms_valid,
   
-  input wire [147:0] ds2es_bus,
-  output wire [70:0] es2ms_bus,
+  input wire [`DS2ES_BUS_LEN-1:0] ds2es_bus,
+  output wire [`ES2MS_BUS_LEN-1:0] es2ms_bus,
   
   output wire data_sram_en,
   output wire [3:0] data_sram_we,
@@ -61,7 +62,7 @@ reg [31:0] rkd_value_reg;
 //////////pipeline////////
 wire es_ready_go;
 
-assign es_ready_go = 1'b1;
+assign es_ready_go = alu_flag;
 assign es_allowin = ~es_valid || es_ready_go && ms_allowin;
 assign es2ms_valid = es_valid && es_ready_go;
 
@@ -105,6 +106,7 @@ end
 
 alu u_alu(
     .clk        (clk        ),
+    .resetn     (resetn     ),
     .alu_op     (alu_op_reg    ),
     .alu_src1   (alu_src1_reg  ),
     .alu_src2   (alu_src2_reg  ),

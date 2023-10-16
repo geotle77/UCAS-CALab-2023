@@ -9,8 +9,8 @@ module MEMstage (
   input wire es2ms_valid,
   output wire ms2ws_valid,
   
-  input wire [70:0] es2ms_bus,
-  output wire [69:0] ms2ws_bus,
+  input wire [`ES2MS_BUS_LEN-1:0] es2ms_bus,
+  output wire [`MS2WS_BUS_LEN-1:0] ms2ws_bus,
 
   output wire mem_rf_we,
   output reg [4:0] mem_dest,
@@ -83,9 +83,7 @@ assign final_result = mem_res_from_mem ? mem_result :
                                         mem_alu_result ;
                       
 
-
 endmodule
-
 
 //////////others//////////
 
