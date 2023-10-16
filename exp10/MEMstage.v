@@ -23,32 +23,29 @@ module MEMstage (
 
 //////////zip//////////
 wire [31:0] es_pc;
+wire [18:0]es_alu_op;
 wire [31:0] alu_result;
 wire exe_res_from_mem;
 wire [4:0] exe_dest;
 wire exe_gr_we;
-assign {es_pc, alu_result, exe_res_from_mem, exe_dest, exe_gr_we} = es2ms_bus;
-
+assign {es_pc,es_alu_op, alu_result, exe_res_from_mem, exe_dest, exe_gr_we} = es2ms_bus;
 
 reg [31:0] ms_pc;
+reg mem_gr_we;
 assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result};
 
 
 //////////declaration//////////
 
-
+reg [18:0] mem_alu_op;
 reg [31:0] mem_alu_result;
 reg mem_res_from_mem;
-wire [31:0] mem_result;
-
-wire mem_rf_we;
+wire [31:0]mem_result;
+wire [31:0]mem_mul_result;
 
 reg ms_valid;
-reg mem_gr_we;
 
 reg res_from_mul_reg;
-
-wire [31:0] mul_result;
 
 //////////pipeline//////////
 wire ms_ready_go;
@@ -63,9 +60,10 @@ always @(posedge clk) begin
   end else if (ms_allowin) begin
     ms_valid <= es2ms_valid;
   end
-  
+ 
   if(es2ms_valid && ms_allowin)begin
     ms_pc <= es_pc;
+    mem_alu_op<=es_alu_op;
     mem_alu_result <= alu_result;
     mem_res_from_mem <= exe_res_from_mem;
     mem_dest <= exe_dest;
@@ -78,9 +76,10 @@ end
 assign mem_rf_we = ms_valid && mem_gr_we;
 
 assign mem_result = data_sram_rdata;
-assign mul_result = alu_result;
+assign mem_mul_result =   ({32{mem_alu_op[12]           }} & mul_result[31:0])
+                    | ({32{mem_alu_op[13]|mem_alu_op[14]}} & mul_result[63:32]);
 assign final_result = mem_res_from_mem ? mem_result : 
-                      res_from_mul_reg?  mul_result :
+                      res_from_mul_reg?  mem_mul_result :
                                          mem_alu_result ;
                       
 

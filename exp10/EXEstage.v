@@ -45,7 +45,7 @@ assign {ds_pc, alu_src1, alu_src2, alu_op, rkd_value, res_from_mem, gr_we, dest,
 
 reg [31:0] es_pc;
 reg exe_res_from_mem;
-assign es2ms_bus = {es_pc, alu_result, exe_res_from_mem, exe_dest, exe_gr_we};
+assign es2ms_bus = {es_pc, alu_op_reg, alu_result, exe_res_from_mem, exe_dest, exe_gr_we};
 
 
 //////////declaration////////
@@ -123,26 +123,16 @@ assign data_sram_addr  = alu_result;
 assign data_sram_wdata = rkd_value_reg;
 
 
-
-
-
 //mul_src
 wire  [33:0]  mul_src1;
 wire  [33:0]  mul_src2;
-wire  [67:0]  z;
-assign mul_src1 = {{2{alu_src1[31] & ~alu_op[14]}}, alu_src1[31:0]};
-assign mul_src2 = {{2{alu_src2[31] & ~alu_op[14]}}, alu_src2[31:0]};
+assign mul_src1 = {{2{alu_src1_reg[31] & ~alu_op_reg[14]}}, alu_src1_reg[31:0]};
+assign mul_src2 = {{2{alu_src2_reg[31] & ~alu_op_reg[14]}}, alu_src2_reg[31:0]};
 
 booth_multiplier u_mul(
   .clk(clk),
-  .mul_signed(alu_op[12] | alu_op[13]),
   .x(mul_src1),
   .y(mul_src2),
-  .z(z)
+  .z(mul_result)
 );
-
-assign mul_result =   ({32{alu_op[12]           }} & z[31:0])
-                    | ({32{alu_op[13]|alu_op[14]}} & z[63:32]);
-
-
 endmodule

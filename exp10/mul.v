@@ -22,7 +22,6 @@
 //booth�˷�������ģ��
 module booth_multiplier(
     input clk,
-    input mul_signed, 
     input  [33:0] x, //������
     input  [33:0] y, //����
     output [67:0] z  //�˻�
@@ -214,7 +213,7 @@ module one_bit_adder(
     input  b,   //������
     input  c,   //��λ����
     output s,   //��
-    output cout //��λ���
+    output cout //��λ���?
 );
 
 assign s = ~(~(a&~b&~c) & ~(~a&b&~c) & ~(~a&~b&c) & ~(a&b&c));
@@ -227,8 +226,8 @@ endmodule
 module wallace_tree (
     input  [16:0] n,    //����
     input  [14:0] cin,  //��λ��������
-    output [14:0] cout, //��λ�������
-    output        c,    //��λ���
+    output [14:0] cout, //��λ�������?
+    output        c,    //��λ���?
     output        s     //��
 );
 

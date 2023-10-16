@@ -71,8 +71,6 @@ wire [`MS2WS_BUS_LEN-1:0]   ms2ws_bus;
 
 wire [67:0] mul_result;
 
-
-
 IFstage my_if (
   .clk(clk),
   .resetn(resetn),

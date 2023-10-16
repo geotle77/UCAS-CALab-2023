@@ -154,8 +154,8 @@ wire res_from_mul;
 //////////pipeline//////////
 wire ds_ready_go;
 assign ds_ready_go    =~(ds_valid && ((exe_rf_we && es_block && 
-                            (exe_dest == rf_raddr1 && |rf_raddr1 && ~src1_is_pc || 
-                             exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm))));//why ask alu_op not 000?
+                            (exe_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc & ~inst_lu12i_w &|alu_op) ||  //
+                             exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm & |alu_op))));//why ask alu_op not 000?
 
 
 assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin;
