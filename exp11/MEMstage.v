@@ -25,7 +25,6 @@ module MEMstage (
 wire [31:0] es_pc;
 wire [18:0]es_alu_op;
 wire [31:0] alu_result;
-wire exe_res_from_mem;
 wire [4:0] exe_dest;
 wire [4:0]load_op;
 wire exe_gr_we;
@@ -76,14 +75,12 @@ end
 
 
 assign mem_rf_we = ms_valid && mem_gr_we;
-assign mem_res_from_mem = ~(|mem_load_op);
+assign mem_res_from_mem = (|mem_load_op);
 
 wire [31:0] ld_data;
 wire [3:0]  ld_sel;
 wire [31:0] lb_data;
-wire [31:0] lbu_data;
 wire [31:0] lh_data;
-wire [31:0] lhu_data;
 
 decoder_2_4 u_dec_ld(.in(mem_alu_result[1:0]), .out(ld_sel));
 wire zero_ext;
