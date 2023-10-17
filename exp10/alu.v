@@ -1,79 +1,217 @@
-module DIV(
-    input  wire    clk,
-    input  wire    resetn,
-    input  wire    div_en,
-    input  wire    div_signed,
-    input  wire [31:0] divisor,   //被除数
-    input  wire [31:0] dividend,   //除数
-    output wire [63:0] result,
-    output wire    complete //除法完成信号
+module alu(
+  input clk,
+  input resetn,
+  input  wire [18:0] alu_op,
+  input  wire [31:0] alu_src1,
+  input  wire [31:0] alu_src2,
+  output wire [31:0] alu_result,
+  output wire        alu_flag
 );
 
-    wire [31:0] quotient;
-    wire [31:0] remainder;
-    wire        sign_s;
-    wire        sign_r;
-    wire [31:0] divisor_abs;
-    wire [31:0] dividend_y;
-    wire [32:0] pre_r;
-    wire [32:0] recover_r;
-    reg  [63:0] divisor_pad;
-    reg  [32:0] dividend_pad;
-    reg  [31:0] quotient_reg;
-    reg  [32:0] remainder_reg;    // 当前的余数
-    reg  [ 5:0] counter;
+wire op_add;   //add operation
+wire op_sub;   //sub operation
+wire op_slt;   //signed compared and set less than
+wire op_sltu;  //unsigned compared and set less than
+wire op_and;   //bitwise and
+wire op_nor;   //bitwise nor
+wire op_or;    //bitwise or
+wire op_xor;   //bitwise xor
+wire op_sll;   //logic left shift
+wire op_srl;   //logic right shift
+wire op_sra;   //arithmetic right shift
+wire op_lui;   //Load Upper Immediate
 
-// 1.确定符号位
-    assign sign_s = (divisor[31]^dividend[31]) & div_signed;
-    assign sign_r = divisor[31] & div_signed;
-    assign divisor_abs  = (div_signed & divisor[31]) ? (~divisor+1'b1): divisor;
-    assign dividend_y  = (div_signed & dividend[31]) ? (~dividend+1'b1): dividend;
-// 2.循环迭代得到商和余数绝对值
-    assign complete = counter[5]&counter[0]&|counter[4:1];
-    //初始化计数器
-    always @(posedge clk) begin
-        if(~resetn) begin
-            counter <= 6'b0;
-        end
-        else if(div_en) begin
-            if(complete)
-                counter <= 6'b0;
-            else
-                counter <= counter + 1'b1;
-        end
-    end
-    //准备操作数,counter=0
-    always @(posedge clk) begin
-        if(~resetn)
-            {divisor_pad, dividend_pad} <= {64'b0, 33'b0};
-        else if(div_en) begin
-            if(~|counter)
-                {divisor_pad, dividend_pad} <= {32'b0, divisor_abs, 1'b0, dividend_y};
-        end
-    end
+//wire op_mul;   //multiply
+//wire op_mulh;  //multiply and store high bits
+//wire op_mulhu; //unsigned multiply and store high bits
+wire op_div;   //divide
+wire op_divu;  //unsigned divide
+wire op_mod;   //mod 
+wire op_modu;  //unsigned mod
 
-    //求解当前迭代的减法结果
-    assign pre_r = remainder_reg - dividend_pad;                     //未恢复余数的结果
-    assign recover_r = pre_r[32] ? remainder_reg : pre_r;     //恢复余数的结果
-    always @(posedge clk) begin
-        if(~resetn) 
-            quotient_reg <= 32'b0;
-        else if(div_en & ~complete & |counter) begin
-            quotient_reg[32-counter] <= ~pre_r[32];
-        end
-    end
-    always @(posedge clk) begin
-        if(~resetn)
-            remainder_reg <= 33'b0;
-        if(div_en & ~complete) begin
-            if(~|counter)   //余数初始化
-                remainder_reg <= {32'b0, divisor_abs[31]};
-            else
-                remainder_reg <=  (~counter[5]&(&counter)) ? recover_r : {recover_r, divisor_pad[31 - counter]};
-        end
-    end
-// 3.调整最终商和余数
-    assign quotient = div_signed & sign_s ? (~quotient_reg+1'b1) : quotient_reg;
-    assign remainder = div_signed & sign_r ? (~remainder_reg+1'b1) : remainder_reg;
-    assign result ={quotient,remainder};
+
+// control code decomposition
+assign op_add  = alu_op[ 0];
+assign op_sub  = alu_op[ 1];
+assign op_slt  = alu_op[ 2];
+assign op_sltu = alu_op[ 3];
+assign op_and  = alu_op[ 4];
+assign op_nor  = alu_op[ 5];
+assign op_or   = alu_op[ 6];
+assign op_xor  = alu_op[ 7];
+assign op_sll  = alu_op[ 8];
+assign op_srl  = alu_op[ 9];
+assign op_sra  = alu_op[10];
+assign op_lui  = alu_op[11];
+//assign op_mul  = alu_op[12];
+//assign op_mulh = alu_op[13];
+//assign op_mulhu= alu_op[14];
+assign op_div  = alu_op[15];
+assign op_divu = alu_op[16];
+assign op_mod  = alu_op[17];
+assign op_modu = alu_op[18];
+
+wire [31:0] add_sub_result;
+wire [31:0] slt_result;
+wire [31:0] sltu_result;
+wire [31:0] and_result;
+wire [31:0] nor_result;
+wire [31:0] or_result;
+wire [31:0] xor_result;
+wire [31:0] lui_result;
+wire [31:0] sll_result;
+wire [63:0] sr64_result;
+wire [31:0] sr_result;
+//wire [67:0] mul_result;
+wire [63:0] div_result;
+
+// 32-bit adder
+wire [31:0] adder_a;
+wire [31:0] adder_b;
+wire        adder_cin;
+wire [31:0] adder_result;
+wire        adder_cout;
+
+assign adder_a   = alu_src1;
+assign adder_b   = (op_sub | op_slt | op_sltu) ? ~alu_src2 : alu_src2;  //src1 - src2 rj-rk
+assign adder_cin = (op_sub | op_slt | op_sltu) ? 1'b1      : 1'b0;
+assign {adder_cout, adder_result} = adder_a + adder_b + adder_cin;
+
+// ADD, SUB result
+assign add_sub_result = adder_result;
+
+// SLT result
+assign slt_result[31:1] = 31'b0;   //rj < rk 1
+assign slt_result[0]    = (alu_src1[31] & ~alu_src2[31])
+                        | ((alu_src1[31] ~^ alu_src2[31]) & adder_result[31]);
+
+// SLTU result
+assign sltu_result[31:1] = 31'b0;
+assign sltu_result[0]    = ~adder_cout;
+
+// bitwise operation
+assign and_result = alu_src1 & alu_src2;
+assign or_result  = alu_src1 | alu_src2;
+assign nor_result = ~or_result;
+assign xor_result = alu_src1 ^ alu_src2;
+assign lui_result = alu_src2;
+
+// SLL result
+assign sll_result = alu_src1 << alu_src2[4:0];   //rj << i5
+
+// SRL, SRA result
+assign sr64_result = {{32{op_sra & alu_src1[31]}}, alu_src1[31:0]} >> alu_src2[4:0]; //rj >> i5
+
+assign sr_result   = sr64_result[31:0];
+
+//div
+/*
+wire div_en;
+reg  div_data_valid;
+reg  divu_data_valid;
+wire divisor_tready;
+wire dividend_tready;
+wire u_divisor_tready;
+wire u_dividend_tready;
+wire div_out_valid;
+wire divu_out_valid;
+reg  div_block;
+
+wire signed_div = op_div | op_mod;
+wire unsigned_div = op_divu| op_modu;
+
+assign div_en = op_mod | op_modu | op_div | op_divu;
+assign div_finish = signed_div & div_out_valid | unsigned_div & divu_out_valid | ~signed_div & ~unsigned_div;
+
+always @(posedge clk) begin
+if(!resetn) begin
+    div_block <= 1'b0;
+  end else if(div_out_valid | divu_out_valid) begin
+    div_block <= 1'b0;
+  end else if(div_data_valid & divisor_tready & dividend_tready | 
+              divu_data_valid & u_divisor_tready & u_dividend_tready) begin
+    div_block <= 1'b1;
+  end
+
+
+  if(div_block) begin
+    div_data_valid <= 1'b0;
+  end else if(signed_div & ~divisor_tready & ~dividend_tready ) begin
+    div_data_valid <= 1'b1;
+  end else begin
+    div_data_valid <= 1'b0;
+  end
+  
+  if(div_block) begin
+    divu_data_valid <= 1'b0;
+  end else if(unsigned_div & ~u_divisor_tready & ~u_dividend_tready ) begin
+    divu_data_valid <= 1'b1;
+  end else begin
+    divu_data_valid <= 1'b0;
+  end
+end
+
+  IP_DIV div(
+  .aclk                   (clk),
+  .s_axis_divisor_tdata   (alu_src2),
+  .s_axis_dividend_tdata  (alu_src1),
+  .s_axis_divisor_tready  (divisor_tready),    // ready to accept divisor
+  .s_axis_dividend_tready (dividend_tready),   // ready to accept dividend
+  .s_axis_divisor_tvalid  (div_data_valid),        // request div
+  .s_axis_dividend_tvalid (div_data_valid),        // request div
+  .m_axis_dout_tdata      (div_result),
+  .m_axis_dout_tvalid     (div_out_valid)
+);
+
+IP_DIV_U divu(
+  .aclk                   (clk),
+  .s_axis_divisor_tdata   (alu_src2),
+  .s_axis_dividend_tdata  (alu_src1),
+  .s_axis_divisor_tready  (u_divisor_tready),
+  .s_axis_dividend_tready (u_dividend_tready),
+  .s_axis_divisor_tvalid  (divu_data_valid),
+  .s_axis_dividend_tvalid (divu_data_valid),
+  .m_axis_dout_tdata      (divu_result),
+  .m_axis_dout_tvalid     (divu_out_valid)
+);
+*/
+wire signed_div = op_div | op_mod;
+wire unsigned_div = op_divu| op_modu;
+wire div_finish;
+
+wire div_en ;
+assign div_en = op_mod | op_modu | op_div | op_divu;
+DIV u_div(
+    .clk(clk),
+    .resetn(resetn),
+    .div_en(div_en),
+    .div_signed(op_mod | op_div),
+    .divisor(alu_src1),
+    .dividend(alu_src2),
+    .result(div_result),
+    .complete(div_finish)
+);
+
+// final result mux
+assign alu_result = ({32{op_add|op_sub   }} & add_sub_result)
+                  | ({32{op_slt          }} & slt_result)
+                  | ({32{op_sltu         }} & sltu_result)
+                  | ({32{op_and          }} & and_result)
+                  | ({32{op_nor          }} & nor_result)
+                  | ({32{op_or           }} & or_result)
+                  | ({32{op_xor          }} & xor_result)
+                  | ({32{op_lui          }} & lui_result)
+                  | ({32{op_sll          }} & sll_result)
+                  | ({32{op_srl|op_sra   }} & sr_result)
+                  //| ({32{op_mul          }} & mul_result[31:0])
+                  //| ({32{op_mulh|op_mulhu}} & mul_result[63:32])
+                 /* | ({32{op_div          }} & div_result[63:32])
+                  | ({32{op_divu         }} & divu_result[63:32])
+                  | ({32{op_mod          }} & div_result[31:0])
+                  | ({32{op_modu         }} & divu_result[31:0]);*/
+                  | ({32{op_mod|op_modu}} & div_result[31:0])
+                  | ({32{op_div|op_divu}} & div_result[63:32]);
+                  
+   assign alu_flag = ~resetn | div_finish & div_en /*| mul_finish & mul_en*/ | ~div_en /*& ~mul_en*/;
+
 endmodule
