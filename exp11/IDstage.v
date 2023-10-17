@@ -163,8 +163,6 @@ wire [31:0] rf_rdata2;
 
 reg [31:0] inst_reg;
 
-wire res_from_mul;
-
 
 
 //////////pipeline//////////
@@ -277,7 +275,7 @@ assign store_op[0] = inst_st_b;
 assign store_op[1] = inst_st_h;
 assign store_op[2] = inst_st_w;
 
-assign alu_op[ 0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w | ~(|load_op) | ~(|store_op)
+assign alu_op[ 0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w | (|load_op) | (|store_op)
                     | inst_jirl | inst_bl | inst_pcaddu12i;
 assign alu_op[ 1] = inst_sub_w;
 assign alu_op[ 2] = inst_slt|inst_slti;

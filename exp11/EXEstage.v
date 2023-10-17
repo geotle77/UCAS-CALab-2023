@@ -47,6 +47,8 @@ assign {ds_pc, alu_src1, alu_src2, alu_op,load_op, store_op, rkd_value, gr_we, d
 
 reg [31:0] es_pc;
 wire [4:0]exe_load_op;
+reg [18:0] alu_op_reg;
+reg exe_gr_we;
 
 assign es2ms_bus = {es_pc, alu_op_reg, alu_result, exe_load_op, exe_dest, exe_gr_we};
 
@@ -54,12 +56,11 @@ assign es2ms_bus = {es_pc, alu_op_reg, alu_result, exe_load_op, exe_dest, exe_gr
 //////////declaration////////
 
 reg es_valid;
-reg exe_gr_we;
 
 reg        mem_we_reg;
 reg [31:0] alu_src1_reg;
 reg [31:0] alu_src2_reg;
-reg [18:0] alu_op_reg;
+
 reg [4:0]  load_op_reg;
 reg [2:0]  store_op_reg;
 reg [31:0] rkd_value_reg;
@@ -128,15 +129,15 @@ assign st_strb = {4{store_op_reg[0]}} &  st_sel
                | {4{store_op_reg[1]}} & (st_sel[0] ? 4'b0011 : 4'b1100)
                | {4{store_op_reg[2]}} &  4'b1111;
 
-assign st_data = {32{store_op_reg[0]}} & {4{rkf_value_reg[7:0]}}
-               | {32{store_op_reg[1]}} & {2{rkf_value_reg[15:0]}}
-               | {32{store_op_reg[2]}} & rkf_value_reg;
+assign st_data = {32{store_op_reg[0]}} & {4{rkd_value_reg[7:0]}}
+               | {32{store_op_reg[1]}} & {2{rkd_value_reg[15:0]}}
+               | {32{store_op_reg[2]}} & rkd_value_reg;
 
 
 assign exe_rf_we = es_valid && exe_gr_we;
 assign exe_load_op =load_op_reg;
-assign data_sram_en    = (mem_we_reg || ~(|load_op)) & es_valid;//1'b1;
-assign data_sram_we    = mem_we_reg ? st_strb : 4'b0
+assign data_sram_en    = (mem_we_reg || (|load_op_reg)) & es_valid;//1'b1;
+assign data_sram_we    = mem_we_reg ? st_strb : 4'b0;
 assign data_sram_addr  = alu_result;
 assign data_sram_wdata = st_data;
 
