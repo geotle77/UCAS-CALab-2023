@@ -64,9 +64,6 @@ wire [63:0] sr64_result;
 wire [31:0] sr_result;
 //wire [67:0] mul_result;
 wire [63:0] div_result;
-wire [63:0] divu_result;
-
-
 
 // 32-bit adder
 wire [31:0] adder_a;
@@ -108,7 +105,7 @@ assign sr64_result = {{32{op_sra & alu_src1[31]}}, alu_src1[31:0]} >> alu_src2[4
 assign sr_result   = sr64_result[31:0];
 
 //div
-
+/*
 wire div_en;
 reg  div_data_valid;
 reg  divu_data_valid;
@@ -177,6 +174,23 @@ IP_DIV_U divu(
   .m_axis_dout_tdata      (divu_result),
   .m_axis_dout_tvalid     (divu_out_valid)
 );
+*/
+wire signed_div = op_div | op_mod;
+wire unsigned_div = op_divu| op_modu;
+wire div_finish;
+
+wire div_en ;
+assign div_en = op_mod | op_modu | op_div | op_divu;
+DIV u_div(
+    .clk(clk),
+    .resetn(resetn),
+    .div_en(div_en),
+    .div_signed(op_mod | op_div),
+    .divisor(alu_src1),
+    .dividend(alu_src2),
+    .result(div_result),
+    .complete(div_finish)
+);
 
 // final result mux
 assign alu_result = ({32{op_add|op_sub   }} & add_sub_result)
@@ -191,10 +205,13 @@ assign alu_result = ({32{op_add|op_sub   }} & add_sub_result)
                   | ({32{op_srl|op_sra   }} & sr_result)
                   //| ({32{op_mul          }} & mul_result[31:0])
                   //| ({32{op_mulh|op_mulhu}} & mul_result[63:32])
-                  | ({32{op_div          }} & div_result[63:32])
+                 /* | ({32{op_div          }} & div_result[63:32])
                   | ({32{op_divu         }} & divu_result[63:32])
                   | ({32{op_mod          }} & div_result[31:0])
-                  | ({32{op_modu         }} & divu_result[31:0]);
+                  | ({32{op_modu         }} & divu_result[31:0]);*/
+                  | ({32{op_mod|op_modu}} & div_result[31:0])
+                  | ({32{op_div|op_divu}} & div_result[63:32]);
+                  
+   assign alu_flag = ~resetn | div_finish & div_en /*| mul_finish & mul_en*/ | ~div_en /*& ~mul_en*/;
 
-assign alu_flag = ~resetn | div_finish & div_en /*| mul_finish & mul_en*/ | ~div_en /*& ~mul_en*/;
 endmodule
