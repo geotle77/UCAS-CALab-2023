@@ -3,10 +3,10 @@ module DIV(
     input  wire    resetn,
     input  wire    div_en,
     input  wire    sign,
-    input  wire [31:0] divisor,   //±»³ıÊı
-    input  wire [31:0] dividend,   //³ıÊı
+    input  wire [31:0] divisor,   //è¢«é™¤æ•°
+    input  wire [31:0] dividend,   //é™¤æ•°
     output wire [63:0] result,
-    output wire    complete //³ı·¨Íê³ÉĞÅºÅ
+    output wire    complete //é™¤æ³•å®Œæˆä¿¡å·
 );
 
     wire [31:0] quotient;
@@ -29,7 +29,7 @@ module DIV(
     assign dividend_y  = (sign & dividend[31]) ? (~dividend+1'b1): dividend;
 
     assign complete = counter[5]&counter[0]&|counter[4:1];
-    //³õÊ¼»¯¼ÆÊıÆ÷
+    //åˆå§‹åŒ–è®¡æ•°å™¨
     always @(posedge clk) begin
         if(~resetn) begin
             counter <= 6'b0;
@@ -64,7 +64,7 @@ module DIV(
         if(~resetn)
             remainder_reg <= 33'b0;
         if(div_en & ~complete) begin
-            if(~|counter)   //ÓàÊı³õÊ¼»¯
+            if(~|counter)   //ä½™æ•°åˆå§‹åŒ–
                 remainder_reg <= {32'b0, divisor_abs[31]};
             else
                 remainder_reg <=  (~counter[5]&(&counter)) ? recover_r : {recover_r, divisor_pad[31 - counter]};
