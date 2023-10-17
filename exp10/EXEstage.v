@@ -124,15 +124,19 @@ assign data_sram_wdata = rkd_value_reg;
 
 
 //mul_src
-wire  [33:0]  mul_src1;
-wire  [33:0]  mul_src2;
-assign mul_src1 = {{2{alu_src1_reg[31] & ~alu_op_reg[14]}}, alu_src1_reg[31:0]};
-assign mul_src2 = {{2{alu_src2_reg[31] & ~alu_op_reg[14]}}, alu_src2_reg[31:0]};
+//wire  [33:0]  mul_src1;
+//wire  [33:0]  mul_src2;
+//assign mul_src1 = {{2{alu_src1_reg[31] & ~alu_op_reg[14]}}, alu_src1_reg[31:0]};
+//assign mul_src2 = {{2{alu_src2_reg[31] & ~alu_op_reg[14]}}, alu_src2_reg[31:0]};
 
-booth_multiplier u_mul(
-  .clk(clk),
-  .x(mul_src1),
-  .y(mul_src2),
-  .z(mul_result)
+Wallace_Mul u_mul(
+  .mul_clk(clk),
+  .resetn(resetn),
+  .mul_signed(~alu_op_reg[14]),
+  .A(alu_src1_reg),
+  .B(alu_src2_reg),
+  .result(result)
 );
+wire [63:0] result;
+assign mul_result = {4'b0, result};
 endmodule
