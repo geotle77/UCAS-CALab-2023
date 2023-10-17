@@ -1,94 +1,76 @@
 module DIV(
-    input wire clk,
-    input wire resetn,
-    input wire         sign,    //1ä¸ºæœ‰ç¬¦å·ï¼Œ0ä¸ºæ— ç¬¦å·
-    input wire         div_en,
-    input wire  [31:0] divisor, //
-    input wire  [31:0] dividend,
+    input  wire    clk,
+    input  wire    resetn,
+    input  wire    div_en,
+    input  wire    sign,
+    input  wire [31:0] divisor,   //±»³ıÊı
+    input  wire [31:0] dividend,   //³ıÊı
     output wire [63:0] result,
-    output wire        flag
-    );
+    output wire    complete //³ı·¨Íê³ÉĞÅºÅ
+);
 
-    //é™¤æ•°å’Œè¢«é™¤æ•°çš„ç»å¯¹å€¼
-    wire [31:0] X_abs;
-    wire [31:0] Y_abs;
-    reg  [5:0]  counter;//è®¡æ•°å™¨ï¼Œ33æ‹ç®—å‡ºç»“æœ
-
-    wire X_signed=divisor[31]&sign;
-    wire Y_signed=dividend[31]&sign;
-
+    wire [31:0] quotient;
+    wire [31:0] remainder;
     wire        sign_s;
     wire        sign_r;
+    wire [31:0] divisor_abs;
+    wire [31:0] dividend_y;
+    wire [32:0] pre_r;
+    wire [32:0] recover_r;
+    reg  [63:0] divisor_pad;
+    reg  [32:0] dividend_pad;
+    reg  [31:0] quotient_reg;
+    reg  [32:0] remainder_reg;    
+    reg  [ 5:0] counter;
 
     assign sign_s = (divisor[31]^dividend[31]) & sign;
     assign sign_r = divisor[31] & sign;
+    assign divisor_abs  = (sign & divisor[31]) ? (~divisor+1'b1): divisor;
+    assign dividend_y  = (sign & dividend[31]) ? (~dividend+1'b1): dividend;
 
-    wire complete;
-    assign complete =counter[5]&counter[0]&(~|counter[4:1]);
-    assign flag=complete;
-    always @(posedge clk )begin
-        if(!resetn)begin
-            counter <= 6'd0;
-            //flag <= 1'b0;
+    assign complete = counter[5]&counter[0]&|counter[4:1];
+    //³õÊ¼»¯¼ÆÊıÆ÷
+    always @(posedge clk) begin
+        if(~resetn) begin
+            counter <= 6'b0;
         end
-        else if(div_en)begin
+        else if(div_en) begin
             if(complete)
-                counter <= 6'd0;
+                counter <= 6'b0;
             else
-                counter <= counter + 6'd1;
+                counter <= counter + 1'b1;
         end
     end
 
-    
-    wire [63:0] result_temp;
-    wire [32:0] Y_pad;
-
-    assign X_abs =(32{X_signed}^divisor) + X_signed;
-    assign Y_abs =(32{Y_signed}^dividend) + Y_signed;
-    
-
-    //åˆå§‹åŒ–é™¤æ•°å’Œè¢«é™¤æ•°
-    always @(posedge clk)begin
-        if(!resetn)begin
-            {result_temp,Y_pad}<= {64'b0,33'b0};
-            end
-        else if(div_en)begin
-            if(counter==6'b0)begin
-                {result_temp,Y_pad}<= {32'b0,X_abs,1'b0,Y_abs};
-                end
-            end
-
-    wire [32:0] pre_remainder;
-    wire [32:0] cover_remainder;
-    wire [31:0] sum_remainder;
-    wire [32:0] current_remainder;
-
-    assign pre_remainder   = current_remainder-Y_pad;
-    assign cover_remainder = pre_remainder[32] ? current_remainder:pre_remainder;//æ¢å¤ä½™æ•°æ³•
-    always @(posedge clk)begin
-        if(!resetn)begin
-            sum_remainder <= 32'b0;
-        end
-        else if(div_en& ~complete & counter!=6'b0 )begin
-            sum_remainder[32-counter] <= ~pre_remainder[32];
+    always @(posedge clk) begin
+        if(~resetn)
+            {divisor_pad, dividend_pad} <= {64'b0, 33'b0};
+        else if(div_en) begin
+            if(~|counter)
+                {divisor_pad, dividend_pad} <= {32'b0, divisor_abs, 1'b0, dividend_y};
         end
     end
 
-    always @(posedge clk)begin
-        if(!resetn)begin
-            current_remainder <= 33'b0;
-        end
-        if(div_en& ~complete)begin
-            if(~|counter)begin
-            current_remainder <= {32'b0,X_abs[31]};
-            end
-            else begin
-            current_remainder <= (&counter[4:0]) ? cover_remainder:{cover_remainder,result_temp[31-counter]};
-            end
+    assign pre_r = remainder_reg - dividend_pad;                  
+    assign recover_r = pre_r[32] ? remainder_reg : pre_r;    
+    always @(posedge clk) begin
+        if(~resetn) 
+            quotient_reg <= 32'b0;
+        else if(div_en & ~complete & |counter) begin
+            quotient_reg[32-counter] <= ~pre_r[32];
         end
     end
-
-    assign result[31:0]= sign & sign_s ? (~result_temp + 1) : result_temp;
-    assign result[63:32] = sign & sign_r ? (~current_remainder + 1) : current_remainder;
+    always @(posedge clk) begin
+        if(~resetn)
+            remainder_reg <= 33'b0;
+        if(div_en & ~complete) begin
+            if(~|counter)   //ÓàÊı³õÊ¼»¯
+                remainder_reg <= {32'b0, divisor_abs[31]};
+            else
+                remainder_reg <=  (~counter[5]&(&counter)) ? recover_r : {recover_r, divisor_pad[31 - counter]};
+        end
+    end
+    assign quotient = sign & sign_s ? (~quotient_reg+1'b1) : quotient_reg;
+    assign remainder = sign & sign_r ? (~remainder_reg+1'b1) : remainder_reg;
+    assign result ={quotient,remainder};
 endmodule
-
