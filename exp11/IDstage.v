@@ -131,7 +131,6 @@ wire inst_sltui;
 wire inst_slti;
 wire inst_andi;
 wire inst_ori;
-wire xori;
 wire inst_sll_w;
 wire inst_srl_w;
 wire inst_sra_w;
@@ -323,8 +322,8 @@ assign src2_is_imm   = inst_slli_w |
                        inst_srli_w |
                        inst_srai_w |
                        inst_addi_w |
-                       inst_ld_w   |
-                       inst_st_w   |
+                        (|load_op) |
+                        (|store_op)|
                        inst_lu12i_w|
                        inst_jirl   |
                        inst_bl     |
@@ -337,8 +336,10 @@ assign src2_is_imm   = inst_slli_w |
 
 assign res_from_mem  = inst_ld_w;
 assign dst_is_r1     = inst_bl;
-assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b;
-assign mem_we        = inst_st_w;
+assign gr_we         = ~inst_st_w & ~inst_st_h & ~inst_st_b & ~inst_beq  & 
+                       ~inst_bne  & ~inst_b    & ~inst_bge  & ~inst_bgeu & 
+                       ~inst_blt  & ~inst_bltu; 
+assign mem_we        = inst_st_w | inst_st_b | inst_st_h;
 assign dest          = dst_is_r1 ? 5'd1 : rd;
 
 
@@ -370,16 +371,16 @@ assign rkd_value =
     (mem_rf_we && mem_dest == rf_raddr2)? final_result :
     (rf_we  && dest_reg   == rf_raddr2)?  rf_wdata   :
     rf_rdata2;
-assign {cout, cout_test} = {1'b0, rj_value} + {1'b0, ~rkd_value} + 1'b1;
+assign {cout, cout_test} =  rj_value + ~rkd_value + 1'b1;
 
 assign rj_eq_rd = (rj_value == rkd_value);
-assign rj_lt_rd = rj_value[31] ^ ~rkd_value[31] ^ cout;
+assign rj_lt_rd = (rj_value[31] & ~rkd_value[31]) | ((rj_value[31] ~^ rkd_value[31]) & cout_test[31]);
 assign rj_ltu_rd = ~cout;
 assign br_taken = (   inst_beq  &&  rj_eq_rd
                    || inst_bne  && !rj_eq_rd
-                   || inst_blt  && rj_lt_rd
+                   || inst_blt  &&  rj_lt_rd
                    || inst_bge  && !rj_lt_rd
-                   || inst_bltu && rj_ltu_rd
+                   || inst_bltu &&  rj_ltu_rd
                    || inst_bgeu && !rj_ltu_rd
                    || inst_jirl
                    || inst_bl
@@ -387,7 +388,7 @@ assign br_taken = (   inst_beq  &&  rj_eq_rd
                   ) && ds_valid && ds_ready_go; 
 assign br_target = (inst_beq || inst_bne || inst_bl || inst_b ||
                     inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (ds_pc + br_offs) :
-                                                   /*inst_jirl*/ (rj_value + jirl_offs);
+                                                   /*inst_jirl*/ (rj_value + jirl_offs) ;
 
 assign alu_src1 = src1_is_pc  ? ds_pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;

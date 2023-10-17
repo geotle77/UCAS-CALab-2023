@@ -29,3 +29,5 @@ The exp10 is to implement **MUL** module and make it work.
 ## exp11 实验流水账
 
 - 2023/10/17 10:00 完成exp11实验，开始debug
+
+- 2023/10/17 19:00 
