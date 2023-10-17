@@ -32,6 +32,8 @@ module EXEstage (
 
 
 //////////zip//////////
+wire [4:0]  load_op;
+wire [2:0]  store_op;
 wire [31:0] ds_pc;
 wire [31:0] alu_src1;
 wire [31:0] alu_src2;
@@ -41,11 +43,12 @@ wire res_from_mem;
 wire gr_we;
 wire [4:0] dest;
 wire mem_we;
-assign {ds_pc, alu_src1, alu_src2, alu_op, rkd_value, res_from_mem, gr_we, dest, mem_we} = ds2es_bus;
+assign {ds_pc, alu_src1, alu_src2, alu_op,load_op, store_op, rkd_value, gr_we, dest, mem_we} = ds2es_bus;
 
 reg [31:0] es_pc;
-reg exe_res_from_mem;
-assign es2ms_bus = {es_pc, alu_op_reg, alu_result, exe_res_from_mem, exe_dest, exe_gr_we};
+wire [4:0]exe_load_op;
+
+assign es2ms_bus = {es_pc, alu_op_reg, alu_result, exe_load_op, exe_dest, exe_gr_we};
 
 
 //////////declaration////////
@@ -57,8 +60,9 @@ reg        mem_we_reg;
 reg [31:0] alu_src1_reg;
 reg [31:0] alu_src2_reg;
 reg [18:0] alu_op_reg;
+reg [4:0]  load_op_reg;
+reg [2:0]  store_op_reg;
 reg [31:0] rkd_value_reg;
-
 
 //////////pipeline////////
 wire es_ready_go;
@@ -80,16 +84,15 @@ always @(posedge clk) begin
     alu_src1_reg <= alu_src1;
     alu_src2_reg <= alu_src2;
     alu_op_reg   <= alu_op;
+    load_op_reg <= load_op;
+    store_op_reg <= store_op;
     rkd_value_reg  <= rkd_value;
-    exe_res_from_mem  <= res_from_mem;
     exe_gr_we         <= gr_we;
     exe_dest          <= dest;
     mem_we_reg <= mem_we;
-    
     exe_res_from_mul <= res_from_mul;
   end
 end
-
 
 always @(posedge clk)begin
     if(ds2es_valid && es_allowin)begin
@@ -101,7 +104,6 @@ always @(posedge clk)begin
         end
     end
 end
-
 
 //////////assign//////////
 
@@ -115,12 +117,28 @@ alu u_alu(
     .alu_result (alu_result)
     );
     
+wire [31:0] st_data;
+
+wire [3:0] st_strb;
+wire [3:0] st_sel;
+
+decoder_2_4 u_dec_st(.in(alu_result[1:0]), .out(st_sel));
+
+assign st_strb = {4{store_op_reg[0]}} &  st_sel
+               | {4{store_op_reg[1]}} & (st_sel[0] ? 4'b0011 : 4'b1100)
+               | {4{store_op_reg[2]}} &  4'b1111;
+
+assign st_data = {32{store_op_reg[0]}} & {4{rkf_value_reg[7:0]}}
+               | {32{store_op_reg[1]}} & {2{rkf_value_reg[15:0]}}
+               | {32{store_op_reg[2]}} & rkf_value_reg;
+
+
 assign exe_rf_we = es_valid && exe_gr_we;
-    
-assign data_sram_en    = mem_we_reg || exe_res_from_mem;//1'b1;
-assign data_sram_we    = {4{mem_we_reg && es_valid}};
+assign exe_load_op =load_op_reg;
+assign data_sram_en    = (mem_we_reg || ~(|load_op)) & es_valid;//1'b1;
+assign data_sram_we    = mem_we_reg ? st_strb : 4'b0
 assign data_sram_addr  = alu_result;
-assign data_sram_wdata = rkd_value_reg;
+assign data_sram_wdata = st_data;
 
 
 //mul_src
@@ -135,4 +153,5 @@ booth_multiplier u_mul(
   .y(mul_src2),
   .z(mul_result)
 );
+
 endmodule

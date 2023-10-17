@@ -27,8 +27,9 @@ wire [18:0]es_alu_op;
 wire [31:0] alu_result;
 wire exe_res_from_mem;
 wire [4:0] exe_dest;
+wire [4:0]load_op;
 wire exe_gr_we;
-assign {es_pc,es_alu_op, alu_result, exe_res_from_mem, exe_dest, exe_gr_we} = es2ms_bus;
+assign {es_pc,es_alu_op, alu_result, load_op, exe_dest, exe_gr_we} = es2ms_bus;
 
 reg [31:0] ms_pc;
 reg mem_gr_we;
@@ -39,7 +40,8 @@ assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result};
 
 reg [18:0] mem_alu_op;
 reg [31:0] mem_alu_result;
-reg mem_res_from_mem;
+reg [ 4:0] mem_load_op;
+wire mem_res_from_mem;
 wire [31:0]mem_result;
 wire [31:0]mem_mul_result;
 
@@ -65,7 +67,7 @@ always @(posedge clk) begin
     ms_pc <= es_pc;
     mem_alu_op<=es_alu_op;
     mem_alu_result <= alu_result;
-    mem_res_from_mem <= exe_res_from_mem;
+    mem_load_op <= load_op;
     mem_dest <= exe_dest;
     mem_gr_we <= exe_gr_we;
     res_from_mul_reg <= exe_res_from_mul;
@@ -74,11 +76,36 @@ end
 
 
 assign mem_rf_we = ms_valid && mem_gr_we;
+assign mem_res_from_mem = ~(|mem_load_op);
+
+wire [31:0] ld_data;
+wire [3:0]  ld_sel;
+wire [31:0] lb_data;
+wire [31:0] lbu_data;
+wire [31:0] lh_data;
+wire [31:0] lhu_data;
+
+decoder_2_4 u_dec_ld(.in(mem_alu_result[1:0]), .out(ld_sel));
+wire zero_ext;
+assign zero_ext = ~(mem_load_op[3] | mem_load_op[4]);
+assign lb_data = {32{ld_sel[0]}} & {{24{mem_result[7] & zero_ext}}, mem_result[7:0]}
+            | {32{ld_sel[1]}} & {{24{mem_result[15] & zero_ext}}, mem_result[15:8]}
+            | {32{ld_sel[2]}} & {{24{mem_result[23] & zero_ext}}, mem_result[23:16]}
+            | {32{ld_sel[3]}} & {{24{mem_result[31] & zero_ext}}, mem_result[31:24]};
+
+assign lh_data = {32{ld_sel[0]}} & {{16{mem_result[15] & zero_ext}}, mem_result[15:0]}
+               | {32{ld_sel[2]}} & {{16{mem_result[31] & zero_ext}}, mem_result[31:16]};
+
+assign ld_data = {32{mem_load_op[0] | mem_load_op[3]}} & lb_data
+               | {32{mem_load_op[1] | mem_load_op[4]}} & lh_data
+               | {32{mem_load_op[2]}} & mem_result;
+
+    
 
 assign mem_result = data_sram_rdata;
-assign mem_mul_result =   ({32{mem_alu_op[12]           }} & mul_result[31:0])
-                    | ({32{mem_alu_op[13]|mem_alu_op[14]}} & mul_result[63:32]);
-assign final_result = mem_res_from_mem ? mem_result : 
+assign mem_mul_result =   ({32{mem_alu_op[12]               }} & mul_result[31: 0])
+                        | ({32{mem_alu_op[13]|mem_alu_op[14]}} & mul_result[63:32]);
+assign final_result = mem_res_from_mem ? ld_data : 
                       res_from_mul_reg?  mem_mul_result :
                                          mem_alu_result ;
                       

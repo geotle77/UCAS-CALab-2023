@@ -19,17 +19,16 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-//booth�˷�������ģ��
 module booth_multiplier(
     input clk,
-    input  [33:0] x, //������
-    input  [33:0] y, //����
-    output [67:0] z  //�˻�
+    input  [33:0] x,
+    input  [33:0] y, 
+    output [67:0] z  
 );
 
 
 
-//���ɲ��ֻ���partial product generator, ppg��
+
 wire [67:0] ppg_p [16:0];
 wire [16:0] ppg_c;
 
@@ -45,7 +44,7 @@ generate
     end
 endgenerate
 
-//����ʿ����wallace tree, wt��
+
 wire [14:0] wt_cio [68:0];
 wire [67:0] wt_c;
 wire [67:0] wt_s;
@@ -166,7 +165,7 @@ endgenerate
 
 
 
-//64λ�ӷ���
+
 assign z = {wt_c_wire[66:0], ppg_c_reg[15]} + wt_s_wire[67:0] + ppg_c_reg[16];
 
 
@@ -174,14 +173,14 @@ assign z = {wt_c_wire[66:0], ppg_c_reg[15]} + wt_s_wire[67:0] + ppg_c_reg[16];
 endmodule
 
 
-//���ֻ�����ģ��
+
 module partial_product_generator #(
     parameter XWIDTH = 68
 )(
-    input  [XWIDTH-1:0] x, //������
-    input  [       2:0] y, //y_{i+1}, y_{i}, y_{i-1}
-    output [XWIDTH-1:0] p, //���ֻ�
-    output              c  //��λ
+    input  [XWIDTH-1:0] x, 
+    input  [       2:0] y, 
+    output [XWIDTH-1:0] p, 
+    output              c  
 );
 
 wire sn;
@@ -207,13 +206,13 @@ assign c = sn | sn2;
 endmodule
 
 
-//һ����ȫ����ģ��
+
 module one_bit_adder(
-    input  a,   //����
-    input  b,   //������
-    input  c,   //��λ����
-    output s,   //��
-    output cout //��λ���?
+    input  a,   
+    input  b,   
+    input  c,   
+    output s,   
+    output cout 
 );
 
 assign s = ~(~(a&~b&~c) & ~(~a&b&~c) & ~(~a&~b&c) & ~(a&b&c));
@@ -222,13 +221,12 @@ assign cout = a&b | a&c | b&c;
 endmodule
 
 
-//����ʿ��ģ��
 module wallace_tree (
-    input  [16:0] n,    //����
-    input  [14:0] cin,  //��λ��������
-    output [14:0] cout, //��λ�������?
-    output        c,    //��λ���?
-    output        s     //��
+    input  [16:0] n,    
+    input  [14:0] cin,  
+    output [14:0] cout, 
+    output        c,   
+    output        s    
 );
 
 wire [15:0] adder_a;
