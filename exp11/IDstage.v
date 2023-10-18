@@ -47,7 +47,7 @@ wire [31:0] alu_src1;
 wire [31:0] alu_src2;
 wire [18:0] alu_op;
 wire [31:0] rkd_value;
-wire res_from_mem;
+//wire res_from_mem;
 wire gr_we;
 wire [4:0] dest;
 wire mem_we;
@@ -65,7 +65,6 @@ wire [4:0] load_op;
 wire [2:0] store_op;
 wire src1_is_pc;
 wire src2_is_imm;
-// wire        res_from_mem;
 wire dst_is_r1;
 // wire        gr_we;
 // wire        mem_we;
@@ -298,7 +297,7 @@ assign alu_op[18] = inst_mod_wu;
 
 assign need_ui5   =  inst_slli_w | inst_srli_w | inst_srai_w;
 assign need_ui12  =  inst_andi | inst_ori | inst_xori;
-assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w | inst_slti | inst_sltui;
+assign need_si12  =  inst_addi_w | (|load_op ) | (|store_op ) | inst_slti | inst_sltui;
 assign need_si16  =  inst_jirl | inst_beq | inst_bne;
 assign need_si20  =  inst_lu12i_w | inst_pcaddu12i;
 assign need_si26  =  inst_b | inst_bl;
@@ -312,9 +311,9 @@ assign imm =                  src2_is_4 ? 32'h4                                 
 assign br_offs = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
                              {{14{i16[15]}}, i16[15:0], 2'b0} ;
 
-assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};
+assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};    
 
-assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w;
+assign src_reg_is_rd = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu | (|store_op );
 
 assign src1_is_pc    = inst_jirl | inst_bl | inst_pcaddu12i;
 
@@ -334,7 +333,6 @@ assign src2_is_imm   = inst_slli_w |
                        inst_slti   |
                        inst_sltui;
 
-assign res_from_mem  = inst_ld_w;
 assign dst_is_r1     = inst_bl;
 assign gr_we         = ~inst_st_w & ~inst_st_h & ~inst_st_b & ~inst_beq  & 
                        ~inst_bne  & ~inst_b    & ~inst_bge  & ~inst_bgeu & 
@@ -371,15 +369,15 @@ assign rkd_value =
     (mem_rf_we && mem_dest == rf_raddr2)? final_result :
     (rf_we  && dest_reg   == rf_raddr2)?  rf_wdata   :
     rf_rdata2;
-assign {cout, cout_test} =  rj_value + ~rkd_value + 1'b1;
+assign {cout, cout_test} = {1'b0, rj_value} + {1'b0, ~rkd_value} + 1'b1;
 
 assign rj_eq_rd = (rj_value == rkd_value);
-assign rj_lt_rd = (rj_value[31] & ~rkd_value[31]) | ((rj_value[31] ~^ rkd_value[31]) & cout_test[31]);
+assign rj_lt_rd = rj_value[31] ^ ~rkd_value[31] ^ cout;
 assign rj_ltu_rd = ~cout;
 assign br_taken = (   inst_beq  &&  rj_eq_rd
                    || inst_bne  && !rj_eq_rd
                    || inst_blt  &&  rj_lt_rd
-                   || inst_bge  && !rj_lt_rd
+                   || inst_bge  &&  !rj_lt_rd
                    || inst_bltu &&  rj_ltu_rd
                    || inst_bgeu && !rj_ltu_rd
                    || inst_jirl
@@ -393,6 +391,6 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b ||
 assign alu_src1 = src1_is_pc  ? ds_pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
 
-assign block = res_from_mem || res_from_mul;
+assign block = (|load_op) || res_from_mul;
 
 endmodule
