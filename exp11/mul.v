@@ -1,243 +1,194 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 2022/09/09 21:48:58
+// Design Name: 
+// Module Name: booth_multiplier
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
 
-module Adder (
-    input   [63:0] in1,
-    input   [63:0] in2,
-    input   [63:0] in3,
-    output  [63:0] C,
-    output  [63:0] S
+//booth³Ë·¨Æ÷¶¥²ãÄ£¿é
+module booth_multiplier(
+    input clk,
+    input  [33:0] x, //±»³ËÊý
+    input  [33:0] y, //³ËÊý
+    output reg [67:0] z  //³Ë»ý
 );
-    assign S  = in1 ^ in2 ^ in3;
-    assign C = {(in1 & in2 | in1 & in3 | in2 & in3), 1'b0} ;
+
+//Éú³É²¿·Ö»ý£¨partial product generator, ppg£©
+wire [67:0] ppg_p [16:0];
+wire [16:0] ppg_c;
+
+genvar i;
+generate
+    for (i=0; i<17; i=i+1) begin : ppg_loop
+        partial_product_generator u_ppg(
+            .x({{(34-2*i){x[33]}}, x, {(2*i){1'b0}}}),
+            .y({y[2*i+1], y[2*i], i==0?1'b0:y[2*i-1]}),
+            .p(ppg_p[i]),
+            .c(ppg_c[i])
+        );
+    end
+endgenerate
+
+//»ªÀ³Ê¿Ê÷£¨wallace tree, wt£©
+wire [14:0] wt_cio [68:0];
+wire [67:0] wt_c;
+wire [67:0] wt_s;
+
+assign wt_cio[0] = ppg_c[14:0];
+
+genvar j;
+generate
+    for (j=0; j<68; j=j+1) begin : wt_loop
+        wallace_tree u_wt(
+            .n      ({
+                        ppg_p[16][j],
+                        ppg_p[15][j], ppg_p[14][j], ppg_p[13][j], ppg_p[12][j], 
+                        ppg_p[11][j], ppg_p[10][j], ppg_p[ 9][j], ppg_p[ 8][j], 
+                        ppg_p[ 7][j], ppg_p[ 6][j], ppg_p[ 5][j], ppg_p[ 4][j], 
+                        ppg_p[ 3][j], ppg_p[ 2][j], ppg_p[ 1][j], ppg_p[ 0][j]
+                    }),
+            .cin    (wt_cio[j]),
+            .cout   (wt_cio[j+1]),
+            .c      (wt_c[j]),
+            .s      (wt_s[j])
+        );
+        
+    end
+endgenerate
+
+
+wire [67:0] z_temp;
+always@ (posedge clk) begin
+    z <= z_temp;
+end
+//64Î»¼Ó·¨Æ÷
+assign z_temp = {wt_c[66:0], ppg_c[15]} + wt_s[67:0] + ppg_c[16];
+
 endmodule
 
-module Wallace_Mul (
-    input          mul_clk,
-    input          resetn,
-    input          mul_signed,
-    input   [31:0] A,
-    input   [31:0] B,
-    output  [63:0] result
+
+//²¿·Ö»ýÉú³ÉÄ£¿é
+module partial_product_generator #(
+    parameter XWIDTH = 68
+)(
+    input  [XWIDTH-1:0] x, //±»³ËÊý
+    input  [       2:0] y, //y_{i+1}, y_{i}, y_{i-1}
+    output [XWIDTH-1:0] p, //²¿·Ö»ý
+    output              c  //½øÎ»
 );
-    reg  [31:0] A_reg;
-    reg  [31:0] B_reg;
-    wire [63:0] A_add;  
-    wire [63:0] A_sub;
-    wire [63:0] A2_add;
-    wire [63:0] A2_sub;
-    wire [34:0] sel_x;
-    wire [34:0] sel_2x;
-    wire [34:0] sel_neg_x;
-    wire [34:0] sel_neg_2x;
-    wire [34:0] sel_0;
-    wire [16:0] sel_x_val;
-    wire [16:0] sel_2x_val;
-    wire [16:0] sel_neg_x_val;
-    wire [16:0] sel_neg_2x_val;
-    wire [16:0] sel_0_val;
-    wire [18:0] debug;
-    // ï¿½ï¿½Õ¹ï¿½ï¿½34Î»ï¿½Ô¼ï¿½ï¿½ï¿½ï¿½Þ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë·ï¿½ï¿½ï¿½Å¼ï¿½ï¿½Î»ï¿½ï¿½ï¿½Ú´ï¿½ï¿½ï¿½ï¿½ï¿½
-    wire [33:0] B_r;
-    wire [33:0] B_m;
-    wire [33:0] B_l;
-    wire [63:0] P [16:0];   // Î´ï¿½ï¿½ï¿½ï¿½Ä²ï¿½ï¿½Ö»ï¿½
 
-    always @(posedge mul_clk) begin
-        if(~resetn)
-            {A_reg, B_reg} <= 64'b0;
-        else    
-            {A_reg, B_reg} <= {A, B};
+wire sn;
+wire sp;
+wire sn2;
+wire sp2;
+
+assign sn  = ~(~( y[2]& y[1]&~y[0]) & ~( y[2]&~y[1]& y[0]));
+assign sp  = ~(~(~y[2]& y[1]&~y[0]) & ~(~y[2]&~y[1]& y[0]));
+assign sn2 = ~(~( y[2]&~y[1]&~y[0]));
+assign sp2 = ~(~(~y[2]& y[1]& y[0]));
+
+assign p[0] =  ~(~(sn&~x[0]) & ~(sp&x[0]) & ~sn2);
+genvar i;
+generate
+    for (i=1; i<XWIDTH; i=i+1) begin : result_selector_loop
+        assign p[i] = ~(~(sn&~x[i]) & ~(sn2&~x[i-1]) & ~(sp&x[i]) & ~(sp2&x[i-1]));
     end
-    assign A_add       = {{32{A[31] & mul_signed}}, A};
-    assign A_sub       = ~ A_add + 1'b1;
-    assign A2_add      = {A_add, 1'b0};
-    assign A2_sub      = ~A2_add + 1'b1; 
-    assign B_m  = {{2{B[31] & mul_signed}}, B};
-    assign B_l  = {1'b0, B_m[33:1]};
-    assign B_r  = {B_m[32:0], 1'b0};
+endgenerate
 
-    assign sel_neg_x   = ( B_l &  B_m & ~B_r) | (B_l & ~B_m & B_r);    // 110, 101
-    assign sel_x       = (~B_l &  B_m & ~B_r) | (~B_l & ~B_m& B_r);    // 010, 001
-    assign sel_neg_2x  = ( B_l & ~B_m & ~B_r) ;                      //  100
-    assign sel_2x      = (~B_l & B_m & B_r);                         // 011
-    assign sel_0       = (B_l & B_m & B_r) | (~B_l & ~B_m & ~B_r);     // 000, 111
+assign c = sn | sn2;
 
-    // ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§ï¿½ï¿½Ñ¡È¡ï¿½Åºï¿½
-    assign sel_x_val    = { sel_x[32], sel_x[30], sel_x[28], sel_x[26], sel_x[24],
-                            sel_x[22], sel_x[20], sel_x[18], sel_x[16],
-                            sel_x[14], sel_x[12], sel_x[10], sel_x[ 8],
-                            sel_x[ 6], sel_x[ 4], sel_x[ 2], sel_x[ 0]};
-    assign sel_neg_x_val= { sel_neg_x[32], sel_neg_x[30], sel_neg_x[28], sel_neg_x[26], sel_neg_x[24],
-                            sel_neg_x[22], sel_neg_x[20], sel_neg_x[18], sel_neg_x[16],
-                            sel_neg_x[14], sel_neg_x[12], sel_neg_x[10], sel_neg_x[ 8],
-                            sel_neg_x[ 6], sel_neg_x[ 4], sel_neg_x[ 2], sel_neg_x[ 0]};     
-    assign sel_2x_val   =  {sel_2x[32], sel_2x[30], sel_2x[28], sel_2x[26], sel_2x[24],
-                            sel_2x[22], sel_2x[20], sel_2x[18], sel_2x[16],
-                            sel_2x[14], sel_2x[12], sel_2x[10], sel_2x[ 8],
-                            sel_2x[ 6], sel_2x[ 4], sel_2x[ 2], sel_2x[ 0]};        
-    assign sel_neg_2x_val= {sel_neg_2x[32], sel_neg_2x[30], sel_neg_2x[28], sel_neg_2x[26], sel_neg_2x[24],
-                            sel_neg_2x[22], sel_neg_2x[20], sel_neg_2x[18], sel_neg_2x[16],
-                            sel_neg_2x[14], sel_neg_2x[12], sel_neg_2x[10], sel_neg_2x[ 8],
-                            sel_neg_2x[ 6], sel_neg_2x[ 4], sel_neg_2x[ 2], sel_neg_2x[ 0]};   
-    assign sel_0_val    =  {sel_0[32], sel_0[30], sel_0[28], sel_0[26], sel_0[24],
-                            sel_0[22], sel_0[20], sel_0[18], sel_0[16],
-                            sel_0[14], sel_0[12], sel_0[10], sel_0[ 8],
-                            sel_0[ 6], sel_0[ 4], sel_0[ 2], sel_0[ 0]}; 
-    // debugï¿½Åºï¿½Ó¦Îª0FFFF                                                                                              
-    assign debug        = sel_x_val + sel_neg_2x_val + sel_neg_x_val + sel_2x_val + sel_0_val;
-    // Ê®ï¿½ï¿½ï¿½ï¿½Î´ï¿½ï¿½ï¿½ï¿½Ä²ï¿½ï¿½Ö»ï¿½
-    assign {P[16], P[15], P[14], P[13], P[12],
-            P[11], P[10], P[ 9], P[ 8],
-            P[ 7], P[ 6], P[ 5], P[ 4],
-            P[ 3], P[ 2], P[ 1], P[ 0]} 
-            =  {{64{sel_x_val[16]}}, {64{sel_x_val[15]}}, {64{sel_x_val[14]}}, {64{sel_x_val[13]}}, {64{sel_x_val[12]}},
-                {64{sel_x_val[11]}}, {64{sel_x_val[10]}}, {64{sel_x_val[ 9]}}, {64{sel_x_val[ 8]}},
-                {64{sel_x_val[ 7]}}, {64{sel_x_val[ 6]}}, {64{sel_x_val[ 5]}}, {64{sel_x_val[ 4]}},
-                {64{sel_x_val[ 3]}}, {64{sel_x_val[ 2]}}, {64{sel_x_val[ 1]}}, {64{sel_x_val[ 0]}}} & {17{A_add}} |
-               {{64{sel_neg_x_val[16]}}, {64{sel_neg_x_val[15]}}, {64{sel_neg_x_val[14]}}, {64{sel_neg_x_val[13]}}, {64{sel_neg_x_val[12]}},
-                {64{sel_neg_x_val[11]}}, {64{sel_neg_x_val[10]}}, {64{sel_neg_x_val[ 9]}}, {64{sel_neg_x_val[ 8]}},
-                {64{sel_neg_x_val[ 7]}}, {64{sel_neg_x_val[ 6]}}, {64{sel_neg_x_val[ 5]}}, {64{sel_neg_x_val[ 4]}},
-                {64{sel_neg_x_val[ 3]}}, {64{sel_neg_x_val[ 2]}}, {64{sel_neg_x_val[ 1]}}, {64{sel_neg_x_val[ 0]}}}  & {17{A_sub}} |
-               {{64{sel_2x_val[16]}}, {64{sel_2x_val[15]}}, {64{sel_2x_val[14]}}, {64{sel_2x_val[13]}}, {64{sel_2x_val[12]}},
-                {64{sel_2x_val[11]}}, {64{sel_2x_val[10]}}, {64{sel_2x_val[ 9]}}, {64{sel_2x_val[ 8]}},
-                {64{sel_2x_val[ 7]}}, {64{sel_2x_val[ 6]}}, {64{sel_2x_val[ 5]}}, {64{sel_2x_val[ 4]}},
-                {64{sel_2x_val[ 3]}}, {64{sel_2x_val[ 2]}}, {64{sel_2x_val[ 1]}}, {64{sel_2x_val[ 0]}}} & {17{A2_add}} |
-               {{64{sel_neg_2x_val[16]}}, {64{sel_neg_2x_val[15]}}, {64{sel_neg_2x_val[14]}}, {64{sel_neg_2x_val[13]}}, {64{sel_neg_2x_val[12]}},
-                {64{sel_neg_2x_val[11]}}, {64{sel_neg_2x_val[10]}}, {64{sel_neg_2x_val[ 9]}}, {64{sel_neg_2x_val[ 8]}},
-                {64{sel_neg_2x_val[ 7]}}, {64{sel_neg_2x_val[ 6]}}, {64{sel_neg_2x_val[ 5]}}, {64{sel_neg_2x_val[ 4]}},
-                {64{sel_neg_2x_val[ 3]}}, {64{sel_neg_2x_val[ 2]}}, {64{sel_neg_2x_val[ 1]}}, {64{sel_neg_2x_val[ 0]}}} & {17{A2_sub}}; 
+endmodule
 
-//-----------------------------------------Level 1--------------------------------------------- 
-    wire [63:0] level_1 [11:0];
-    Adder adder1_1 (
-        .in1({P[15], 30'b0}),
-        .in2({P[14], 28'b0}),
-        .in3({P[13], 26'b0}),
-        .C(level_1[0]),
-        .S(level_1[1])
-    );
-    Adder adder1_2 (
-        .in1({P[12], 24'b0}),
-        .in2({P[11], 22'b0}),
-        .in3({P[10], 20'b0}),
-        .C(level_1[2]),
-        .S(level_1[3])
-    );
-    Adder adder1_3 (
-        .in1({P[ 9], 18'b0}),
-        .in2({P[ 8], 16'b0}),
-        .in3({P[ 7], 14'b0}),
-        .C(level_1[4]),
-        .S(level_1[5])
-    );
-    Adder adder1_4 (
-        .in1({P[ 6], 12'b0}),
-        .in2({P[ 5], 10'b0}),
-        .in3({P[ 4],  8'b0}),
-        .C(level_1[6]),
-        .S(level_1[7])
-    );
-    Adder adder1_5 (
-        .in1({P[ 3],  6'b0}),
-        .in2({P[ 2],  4'b0}),
-        .in3({P[ 1],  2'b0}),
-        .C(level_1[8]),
-        .S(level_1[9])
-    );
-    assign level_1[10] = P[0];
-    assign level_1[11] = {P[16], 32'b0};
-//-----------------------------------------Level 2--------------------------------------------- 
-    wire [63:0] level_2 [7:0];
-    Adder adder2_1 (
-        .in1(level_1[0]),
-        .in2(level_1[1]),
-        .in3(level_1[2]),
-        .C(level_2[0]),
-        .S(level_2[1])
-    );
-    Adder adder2_2 (
-        .in1(level_1[3]),
-        .in2(level_1[4]),
-        .in3(level_1[5]),
-        .C(level_2[2]),
-        .S(level_2[3])
-    );
-    Adder adder2_3 (
-        .in1(level_1[6]),
-        .in2(level_1[7]),
-        .in3(level_1[8]),
-        .C(level_2[4]),
-        .S(level_2[5])
-    );
-    Adder adder2_4 (
-        .in1(level_1[9]),
-        .in2(level_1[10]),
-        .in3(level_1[11]),
-        .C(level_2[6]),
-        .S(level_2[7])
-    );
-//-----------------------------------------Level 3--------------------------------------------- 
-    wire [63:0] level_3 [5:0];
-    Adder adder3_1 (
-        .in1(level_2[0]),
-        .in2(level_2[1]),
-        .in3(level_2[2]),
-        .C(level_3[0]),
-        .S(level_3[1])
-    );
-    Adder adder3_2 (
-        .in1(level_2[3]),
-        .in2(level_2[4]),
-        .in3(level_2[5]),
-        .C(level_3[2]),
-        .S(level_3[3])
-    );
-    assign level_3[4] = level_2[6];
-    assign level_3[5] = level_2[7];
-//-----------------------------------------ï¿½ï¿½Ë®ï¿½ï¿½ï¿½Ð·ï¿½-------------------------------------------
-    reg  [63:0] level_3_r [5:0];
-    always @(posedge mul_clk) begin
-        if(~resetn)
-            {level_3_r[0],level_3_r[1],level_3_r[2],
-             level_3_r[3],level_3_r[4],level_3_r[5]} <= {6{64'b0}};
-        else
-            {level_3_r[0],level_3_r[1],level_3_r[2],
-             level_3_r[3],level_3_r[4],level_3_r[5]} <= {level_3[0],level_3[1],level_3[2],
-                                                        level_3[3],level_3[4],level_3[5]};
+
+//Ò»±ÈÌØÈ«¼ÓÆ÷Ä£¿é
+module one_bit_adder(
+    input  a,   //¼ÓÊý
+    input  b,   //±»¼ÓÊý
+    input  c,   //½øÎ»ÊäÈë
+    output s,   //ºÍ
+    output cout //½øÎ»Êä³ö
+);
+
+assign s = ~(~(a&~b&~c) & ~(~a&b&~c) & ~(~a&~b&c) & ~(a&b&c));
+assign cout = a&b | a&c | b&c;
+
+endmodule
+
+
+//»ªÀ³Ê¿Ê÷Ä£¿é
+module wallace_tree(
+    input  [16:0] n,    //¼ÓÊý
+    input  [14:0] cin,  //½øÎ»´«µÝÊäÈë
+    output [14:0] cout, //½øÎ»´«µÝÊä³ö
+    output        c,    //½øÎ»Êä³ö
+    output        s     //ºÍ
+);
+
+wire [15:0] adder_a;
+wire [15:0] adder_b;
+wire [15:0] adder_c;
+wire [15:0] adder_s;
+wire [15:0] adder_cout;
+genvar i;
+generate
+    for (i=0; i<16; i=i+1) begin : adder_loop
+        one_bit_adder u_adder(
+            .a(adder_a[i]),
+            .b(adder_b[i]),
+            .c(adder_c[i]),
+            .s(adder_s[i]),
+            .cout(adder_cout[i])
+        );
     end
-//-----------------------------------------Level 4--------------------------------------------- 
-    wire [63:0] level_4 [3:0];
-    Adder adder4_1 (
-        .in1(level_3_r[0]),
-        .in2(level_3_r[1]),
-        .in3(level_3_r[2]),
-        .C(level_4[0]),
-        .S(level_4[1])
-    );
-    Adder adder4_2 (
-        .in1(level_3_r[3]),
-        .in2(level_3_r[4]),
-        .in3(level_3_r[5]),
-        .C(level_4[2]),
-        .S(level_4[3])
-    );
-//-----------------------------------------Level 5--------------------------------------------- 
-    wire [63:0] level_5 [2:0];
-    Adder adder5_1 (
-        .in1(level_4[0]),
-        .in2(level_4[1]),
-        .in3(level_4[2]),
-        .C(level_5[0]),
-        .S(level_5[1])
-    );
-    assign level_5[2] = level_4[3]; 
-//-----------------------------------------Level 6--------------------------------------------- 
-    wire [63:0] level_6 [1:0];
-    Adder adder6_1 (
-        .in1(level_5[0]),
-        .in2(level_5[1]),
-        .in3(level_5[2]),
-        .C(level_6[0]),
-        .S(level_6[1])
-    );
-    assign result = (level_6[0] + level_6[1]) & {64{resetn}};
+endgenerate
+
+// level 1
+wire [11:0] l1;
+assign {adder_a[5:0], adder_b[5:0], adder_c[5:0]} = {n[16:0], 1'b0};
+assign cout[5:0] = adder_cout[5:0];
+assign l1 = {adder_s[5:0], cin[5:0]};
+
+// level 2
+wire [7:0] l2;
+assign {adder_a[9:6], adder_b[9:6], adder_c[9:6]} = {l1[11:0]};
+assign cout[9:6] = adder_cout[9:6];
+assign l2 = {adder_s[9:6], cin[9:6]};
+
+// level 3
+wire [5:0] l3;
+assign {adder_a[11:10], adder_b[11:10], adder_c[11:10]} = l2[5:0];
+assign cout[11:10] = adder_cout[11:10];
+assign l3 = {adder_s[11:10], l2[7:6], cin[11:10]};
+
+// level 4
+wire [3:0] l4;
+assign {adder_a[13:12], adder_b[13:12], adder_c[13:12]} = l3[5:0];
+assign cout[13:12] = adder_cout[13:12];
+assign l4 = {adder_s[13:12], cin[13:12]};
+
+// level 5
+wire [2:0] l5;
+assign {adder_a[14], adder_b[14], adder_c[14]} = l4[2:0];
+assign cout[14] = adder_cout[14];
+assign l5 = {adder_s[14], l4[3], cin[14]};
+
+// level 6
+assign {adder_a[15], adder_b[15], adder_c[15]} = l5[2:0];
+assign c = adder_cout[15];
+assign s = adder_s[15];
+
 endmodule
