@@ -19,7 +19,10 @@ module IDstage (
   input wire es_block,
   output wire block,
   
-  output wire res_from_mul
+  output wire res_from_mul,
+  
+  input wire ms_ex,
+  input wire wb_ex
 );
 
 //////////zip//////////
@@ -56,7 +59,8 @@ wire [31:0] rkd_value;
 wire gr_we;
 wire [4:0] dest;
 wire mem_we;
-assign ds2es_bus = {ds_pc, alu_src1, alu_src2, alu_op, mul_op, load_op, store_op, rkd_value, gr_we, dest};
+wire [`EXCEPT_LEN-1 : 0] ds_except_zip;
+assign ds2es_bus = {ds_pc, alu_src1, alu_src2, alu_op, mul_op, load_op, store_op, rkd_value, gr_we, dest, ds_except_zip/*82bits*/};
 
 //////////declaration////////
 reg ds_valid;
@@ -140,16 +144,24 @@ wire inst_srl_w;
 wire inst_sra_w;
 wire inst_pcaddu12i;
 
-wire        inst_blt;
-wire        inst_bge;
-wire        inst_bltu;
-wire        inst_bgeu;
-wire        inst_ld_b;
-wire        inst_ld_h;
-wire        inst_ld_bu;
-wire        inst_ld_hu;
-wire        inst_st_b;
-wire        inst_st_h;
+wire inst_blt;
+wire inst_bge;
+wire inst_bltu;
+wire inst_bgeu;
+wire inst_ld_b;
+wire inst_ld_h;
+wire inst_ld_bu;
+wire inst_ld_hu;
+wire inst_st_b;
+wire inst_st_h;
+
+//系统调用异常支持指令
+wire inst_csrrd;
+wire inst_csrwr;
+wire inst_csrxchg;
+wire inst_ertn;
+wire inst_syscall;
+
 
 wire need_ui5;
 wire need_ui12;
@@ -170,16 +182,20 @@ reg [31:0] inst_reg;
 
 //////////pipeline//////////
 wire ds_ready_go;
-assign ds_ready_go    =~(ds_valid && ((exe_rf_we && es_block && 
+assign ds_ready_go    =~((((exe_rf_we && (es_block | es_csr_re) && 
                             (exe_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc & ~inst_lu12i_w & |alu_op |(|mul_op)) ||  //
-                             exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm & |alu_op|(|mul_op)))));
+                             exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm & |alu_op|(|mul_op)))))                      ||
+                          mem_rf_we && (ms_csr_re) &&
+                            (mem_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc & ~inst_lu12i_w & |alu_op |(|mul_op)) ||  //
+                             mem_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm & |alu_op|(|mul_op)
+                          ));
 
 
 assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin;
 assign ds2es_valid = ds_valid && ds_ready_go;
 
 always @(posedge clk) begin
-  if (reset || br_taken) begin
+  if (reset || br_taken || wb_ex) begin
     ds_valid <= 1'b0;
   end else if (ds_allowin) begin
     ds_valid <= fs2ds_valid;
@@ -269,6 +285,13 @@ assign inst_ld_hu  = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
 assign inst_st_b   = op_31_26_d[6'h0a] & op_25_22_d[4'h4];
 assign inst_st_h   = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
 
+assign inst_csrrd   = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h00);
+assign inst_csrwr   = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h01);
+assign inst_csrxchg = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & ~inst_csrrd & ~inst_csrwr;
+assign inst_ertn    = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] 
+                    & (rk == 5'h0e) & (~|rj) & (~|rd);
+assign inst_syscall = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
+
 assign load_op[0] = inst_ld_b;
 assign load_op[1] = inst_ld_h;
 assign load_op[2] = inst_ld_w;
@@ -341,7 +364,7 @@ assign src2_is_imm   = inst_slli_w |
 assign dst_is_r1     = inst_bl;
 assign gr_we         = ~inst_st_w & ~inst_st_h & ~inst_st_b & ~inst_beq  & 
                        ~inst_bne  & ~inst_b    & ~inst_bge  & ~inst_bgeu & 
-                       ~inst_blt  & ~inst_bltu; 
+                       ~inst_blt  & ~inst_bltu & ~inst_syscall & ~inst_ertn;
 assign mem_we        = inst_st_w | inst_st_b | inst_st_h;
 assign dest          = dst_is_r1 ? 5'd1 : rd;
 
@@ -397,5 +420,14 @@ assign alu_src1 = src1_is_pc  ? ds_pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
 
 assign block = (|load_op) || res_from_mul;
+
+
+assign csr_re    = inst_csrrd | inst_csrwr | inst_csrxchg;
+assign csr_we    = inst_csrwr | inst_csrxchg;
+assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
+assign csr_wvalue   = rkd_value;
+assign csr_num   = inst_reg[23:10];
+
+assign ds_except_zip  = {csr_num, csr_wmask, csr_wvalue, inst_syscall, inst_ertn, csr_re, csr_we};
 
 endmodule

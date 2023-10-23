@@ -24,7 +24,10 @@ module EXEstage (
   
   input wire res_from_mul,
   output reg exe_res_from_mul,
-  output [67:0] mul_result
+  output [67:0] mul_result,
+
+  input wire ms_ex,
+  input wire wb_ex
 );
 
 
@@ -39,7 +42,8 @@ wire [2:0]  mul_op;
 wire [31:0] rkd_value;
 wire gr_we;
 wire [4:0] dest;
-assign {ds_pc, alu_src1, alu_src2, alu_op, mul_op,  load_op, store_op, rkd_value, gr_we, dest} = ds2es_bus;
+wire [`EXCEPT_LEN-1 : 0] except_zip;
+assign {ds_pc, alu_src1, alu_src2, alu_op, mul_op,  load_op, store_op, rkd_value, gr_we, dest, except_zip} = ds2es_bus;
 reg [4:0] exe_dest;
 wire [31:0] alu_result;
 assign exe_forward_zip={exe_rf_we, exe_dest, alu_result};
@@ -48,8 +52,8 @@ wire [4:0] exe_load_op;
 reg [15:0] alu_op_reg;
 reg [2:0]  mul_op_reg;
 reg exe_gr_we;
-
-assign es2ms_bus = {es_pc, mul_op_reg, alu_result, exe_load_op, exe_dest, exe_gr_we};
+reg [`EXCEPT_LEN-1 : 0] exe_except_zip;
+assign es2ms_bus = {es_pc, mul_op_reg, alu_result, exe_load_op, exe_dest, exe_gr_we,exe_except_zip};
 //////////declaration////////
 
 reg es_valid;
@@ -73,6 +77,9 @@ assign es2ms_valid = es_valid && es_ready_go;
 always @(posedge clk) begin
   if (reset) begin
     es_valid <= 1'b0;
+  end 
+  else if(wb_ex) begin
+    es_valid <= 1'b0;
   end else if (es_allowin) begin
     es_valid <= ds2es_valid;
   end
@@ -89,6 +96,7 @@ always @(posedge clk) begin
     exe_gr_we     <= gr_we;
     exe_dest          <= dest;
     exe_res_from_mul <= res_from_mul;
+    exe_except_zip <= except_zip;
   end
 end
 
@@ -131,7 +139,7 @@ assign mem_we=(|store_op_reg);
 assign exe_rf_we = es_valid && exe_gr_we;
 assign exe_load_op =load_op_reg;
 assign data_sram_en    =  ((|exe_load_op)|mem_we) & es_valid;//1'b1;
-assign data_sram_we    =  mem_we? st_strb : 4'b0;
+assign data_sram_we    =  {4{es_valid & ~wb_ex & ~ms_ex}} & mem_we ? st_strb : 4'b0;
 assign data_sram_addr  =  alu_result;
 assign data_sram_wdata =  st_data;
 //mul_src
