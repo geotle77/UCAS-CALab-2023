@@ -200,7 +200,7 @@ always @(posedge clk) begin
   end else if (ds_allowin) begin
     ds_valid <= fs2ds_valid;
   end
-  
+
   if(fs2ds_valid && ds_allowin)begin
     ds_pc <= fs_pc;
     inst_reg <= inst;

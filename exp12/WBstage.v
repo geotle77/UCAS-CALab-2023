@@ -82,7 +82,7 @@ assign wb_esubcode = 9'b0;
 //////////assign//////////
 assign rf_we = gr_we_reg && ws_valid;
 assign rf_waddr = dest_reg;
-assign rf_wdata = csr_re final_result_reg;
+assign rf_wdata = csr_re ? csr_rvalue : final_result_reg;
 
 assign debug_wb_pc = ws_pc;
 assign debug_wb_rf_we = {4{rf_we}};
