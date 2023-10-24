@@ -87,6 +87,6 @@ assign rf_wdata = csr_re ? csr_rvalue : final_result_reg;
 assign debug_wb_pc = ws_pc;
 assign debug_wb_rf_we = {4{rf_we}};
 assign debug_wb_rf_wnum = dest_reg;
-assign debug_wb_rf_wdata = final_result_reg;
+assign debug_wb_rf_wdata = csr_re ? csr_rvalue : final_result_reg;
 
 endmodule
