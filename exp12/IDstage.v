@@ -189,14 +189,22 @@ wire [13:0] csr_num;
 
 
 //////////pipeline//////////
+
 wire ds_ready_go;
-assign ds_ready_go    =~((((exe_rf_we && (es_block | es_csr_re) && 
-                            (exe_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc & ~inst_lu12i_w & |alu_op |(|mul_op)) ||  //
-                             exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm & |alu_op|(|mul_op)))))                      ||
-                          mem_rf_we && (ms_csr_re) &&
-                            (mem_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc & ~inst_lu12i_w & |alu_op |(|mul_op)) ||  //
-                             mem_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm & |alu_op|(|mul_op)
-                          ));
+wire exe_conflict_rj;
+wire exe_conflict_rkd;
+wire mem_conflict_rj;
+wire mem_conflict_rkd;
+wire branch;
+
+assign branch = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu;
+assign exe_conflict_rj  = exe_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc  & ~inst_lu12i_w & (|alu_op) | (|mul_op) | csr_re | branch);
+assign exe_conflict_rkd = exe_dest == rf_raddr2 && |rf_raddr2 && (~src2_is_imm &                 (|alu_op) | (|mul_op) | csr_re | branch);
+assign mem_conflict_rj  = mem_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc  & ~inst_lu12i_w & (|alu_op) | (|mul_op) | csr_re | branch);
+assign mem_conflict_rkd = mem_dest == rf_raddr2 && |rf_raddr2 && (~src2_is_imm &                 (|alu_op) | (|mul_op) | csr_re | branch);
+
+assign ds_ready_go    = ~(      exe_rf_we && (es_block | es_csr_re) && (exe_conflict_rj || exe_conflict_rkd)    ||
+                                mem_rf_we && (ms_csr_re)            && (mem_conflict_rj || mem_conflict_rkd)        );
 
 
 assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin;
@@ -259,7 +267,7 @@ assign inst_bne    = op_31_26_d[6'h17];
 assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst_reg[25];
 
 //additional instruction!
-assign inst_pcaddu12i = op_31_26_d[6'h07] & ~inst[25];
+assign inst_pcaddu12i = op_31_26_d[6'h07] & ~inst_reg[25];
 
 //shift inst
 assign inst_sll_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0e];
@@ -349,7 +357,7 @@ assign br_offs = {32{need_si26}} & {{ 4{i26[25]}}, i26[25:0], 2'b0} |
 
 assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};    
 
-assign src_reg_is_rd = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu | (|store_op );
+assign src_reg_is_rd = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu | (|store_op ) | csr_re;
 
 assign src1_is_pc    = inst_jirl | inst_bl | inst_pcaddu12i;
 

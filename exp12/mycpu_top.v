@@ -36,7 +36,7 @@ always @(posedge clk) begin
 end
 
 
-wire fs_allowin;
+//wire fs_allowin;
 wire ds_allowin;
 wire es_allowin;
 wire ms_allowin;
@@ -50,12 +50,12 @@ wire [`FORWARD_BUS_LEN-1:0] exe_forward_zip;
 wire [`FORWARD_BUS_LEN-1:0] mem_forward_zip;
 
 
-wire mem_rf_we;
-wire [4:0] mem_dest;
-wire exe_rf_we;
-wire [4:0] exe_dest;
-wire [31:0] alu_result;
-wire [31:0] final_result;
+//wire mem_rf_we;
+//wire [4:0] mem_dest;
+//wire exe_rf_we;
+//wire [4:0] exe_dest;
+//wire [31:0] alu_result;
+//wire [31:0] final_result;
 
 wire res_from_mul;
 wire exe_res_from_mul;
