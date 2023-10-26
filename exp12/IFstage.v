@@ -12,9 +12,13 @@ module IFstage (
   input  wire [31:0] inst_sram_rdata,
   //the interface between the IFstage and the IDstage  
   output wire [`FS2DS_BUS_LEN-1:0] fs2ds_bus,
-  output reg  fs_valid,
   input  wire ds_allowin,
-  output wire fs2ds_valid
+  output wire fs2ds_valid,
+
+  input wire wb_ex,
+  input wire ertn_flush,
+  input wire [31:0] ex_entry,
+  input wire [31:0] ertn_entry
 );
 //////////declaration//////////
 wire [31:0] seq_pc;
@@ -32,9 +36,10 @@ assign fs2ds_bus = {fs_pc, inst};
 //////////pipeline////////
 wire fs_ready_go; 
 wire fs_allowin; 
+reg fs_valid;
 
 assign fs_ready_go = 1'b1;
-assign fs_allowin = ~fs_valid || fs_ready_go && ds_allowin;
+assign fs_allowin = ~fs_valid || fs_ready_go && ds_allowin || ertn_flush || wb_ex;
 assign fs2ds_valid = fs_valid && fs_ready_go;
 
 assign fs_pc = pc;
@@ -58,7 +63,9 @@ end
 //////////assign//////////
 
 assign seq_pc = pc + 3'h4;
-assign nextpc = br_taken ? br_target : seq_pc;
+assign nextpc  =  wb_ex? ex_entry:
+                  ertn_flush? ertn_entry:
+                  br_taken ? br_target : seq_pc;
 
 assign inst_sram_en = resetn && fs_allowin;
 assign inst_sram_we = 4'b0;

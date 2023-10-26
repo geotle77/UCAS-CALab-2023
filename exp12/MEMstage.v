@@ -14,7 +14,11 @@ module MEMstage (
 
   output wire [`FORWARD_BUS_LEN-1:0] mem_forward_zip,
   input wire exe_res_from_mul,
-  input [67:0] mul_result
+  input [67:0] mul_result,
+
+  output wire ms_ex,
+  input wire wb_ex,
+  output wire ms_csr_re
 );
 
 
@@ -25,11 +29,13 @@ wire [4:0] exe_dest;
 wire [4:0]load_op;
 wire [2:0]mul_op;
 wire exe_gr_we;
-assign {es_pc, mul_op, alu_result, load_op, exe_dest, exe_gr_we} = es2ms_bus;
+wire [`EXCEPT_LEN-1 : 0] except_zip;
+assign {es_pc, mul_op, alu_result, load_op, exe_dest, exe_gr_we ,except_zip} = es2ms_bus;
 
 reg [31:0] ms_pc;
 reg mem_gr_we;
-assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result};
+reg [`EXCEPT_LEN-1 : 0] mem_except_zip;
+assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result, mem_except_zip};
 
 wire mem_rf_we;
 reg [4:0] mem_dest_reg;
@@ -58,11 +64,16 @@ wire ms_ready_go;
 assign ms_ready_go = 1'b1;
 assign ms_allowin = ~ms_valid || ms_ready_go && ws_allowin;
 assign ms2ws_valid = ms_valid && ms_ready_go;
+assign ms_ex = mem_except_zip[3] | mem_except_zip[2]; 
 
 always @(posedge clk) begin
   if (reset) begin
     ms_valid <= 1'b0;
-  end else if (ms_allowin) begin
+  end 
+  if (wb_ex) begin
+    ms_valid <= 1'b0;
+  end
+  else if (ms_allowin) begin
     ms_valid <= es2ms_valid;
   end
  
@@ -74,9 +85,14 @@ always @(posedge clk) begin
     mem_dest_reg <= exe_dest;
     mem_gr_we <= exe_gr_we;
     res_from_mul_reg <= exe_res_from_mul;
+    mem_except_zip <= except_zip;
   end
 end
 
+
+assign ms_csr_re = mem_except_zip[1];
+
+assign ms_ex = mem_except_zip[3] | mem_except_zip[2];
 
 assign mem_rf_we = ms_valid && mem_gr_we;
 assign mem_res_from_mem = (|mem_load_op);
