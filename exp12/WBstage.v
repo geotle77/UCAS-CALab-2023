@@ -17,7 +17,7 @@ module WBstage (
   output wire [31:0] debug_wb_rf_wdata,
 
   output reg ws_valid,
-  output reg csr_re,
+  output wire csr_re,
   output wire [13:0] csr_num,
   input  wire [31:0] csr_rvalue,
   output wire csr_we,
@@ -60,7 +60,7 @@ always @(posedge clk) begin
   if (reset) begin
     ws_valid <= 1'b0;
   end 
-  else (wb_ex | ertn_flush) begin
+  else if (wb_ex | ertn_flush) begin
     ws_valid <= 1'b0;
   end
   else if (ws_allowin) begin
@@ -76,7 +76,7 @@ always @(posedge clk) begin
   end
 end
 
-assign {csr_num, csr_wmask, csr_wvalue, wb_ex, ertn_flush, csr_re, csr_we} = ws_except_zip & {82{ws_valid}};    // wb_ex=inst_syscall, ertn_flush=inst_ertn
+assign {csr_num, csr_wmask, csr_wvalue, wb_ex, ertn_flush, csr_re, csr_we} = wb_except_zip & {82{ws_valid}};    // wb_ex=inst_syscall, ertn_flush=inst_ertn
 assign wb_ecode = {6{wb_ex}} & 6'hb;
 assign wb_esubcode = 9'b0;
 //////////assign//////////

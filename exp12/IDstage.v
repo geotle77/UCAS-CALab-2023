@@ -22,7 +22,10 @@ module IDstage (
   output wire res_from_mul,
   
   input wire ms_ex,
-  input wire wb_ex
+  input wire wb_ex,
+  
+  input wire es_csr_re,
+  input wire ms_csr_re
 );
 
 //////////zip//////////
@@ -178,6 +181,11 @@ wire [31:0] rf_rdata2;
 
 reg [31:0] inst_reg;
 
+wire csr_re;
+wire csr_we;
+wire [31:0] csr_wmask;
+wire [31:0] csr_wvalue;
+wire [13:0] csr_num;
 
 
 //////////pipeline//////////

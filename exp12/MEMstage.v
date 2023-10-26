@@ -17,7 +17,8 @@ module MEMstage (
   input [67:0] mul_result,
 
   output wire ms_ex,
-  input wire wb_ex
+  input wire wb_ex,
+  output wire ms_csr_re
 );
 
 
@@ -87,6 +88,9 @@ always @(posedge clk) begin
     mem_except_zip <= except_zip;
   end
 end
+
+
+assign ms_csr_re = mem_except_zip[1];
 
 assign ms_ex = mem_except_zip[3] | mem_except_zip[2];
 

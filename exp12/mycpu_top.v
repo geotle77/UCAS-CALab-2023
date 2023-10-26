@@ -86,6 +86,11 @@ wire        wb_ex;
 wire [ 5:0] wb_ecode;
 wire [ 8:0] wb_esubcode;
 
+wire ms_csr_re;
+wire es_csr_re;
+
+wire [31:0] ws_pc;
+
 IFstage my_if (
   .clk              (clk),
   .resetn           (resetn),
@@ -130,7 +135,9 @@ IDstage my_id (
   .block            (block),
 
   .ms_ex            (ms_ex),
-  .wb_ex            (wb_ex | ertn_flush)
+  .wb_ex            (wb_ex | ertn_flush),
+  .ms_csr_re        (ms_csr_re),
+  .es_csr_re        (es_csr_re)
 );
 
 EXEstage my_exe (
@@ -160,7 +167,8 @@ EXEstage my_exe (
   .mul_result       (mul_result),
 
   .ms_ex            (ms_ex),
-  .wb_ex            (wb_ex | ertn_flush)
+  .wb_ex            (wb_ex | ertn_flush),
+  .es_csr_re        (es_csr_re)
 );
 
 MEMstage my_mem (
@@ -182,7 +190,8 @@ MEMstage my_mem (
   .mul_result       (mul_result),
 
   .ms_ex            (ms_ex),
-  .wb_ex            (wb_ex | ertn_flush)
+  .wb_ex            (wb_ex | ertn_flush),
+  .ms_csr_re        (ms_csr_re)
 );
 
 WBstage my_wb (
@@ -213,7 +222,7 @@ WBstage my_wb (
   .csr_wvalue       (csr_wvalue),
   .ertn_flush       (ertn_flush),
   .wb_ex            (wb_ex),
-  .wb_pc            (wb_pc),
+  .ws_pc            (ws_pc),
   .wb_ecode         (wb_ecode),
   .wb_esubcode      (wb_esubcode)
 );
@@ -232,7 +241,7 @@ WBstage my_wb (
     .ertn_entry     (ertn_entry),
     .ertn_flush     (ertn_flush),
     .wb_ex          (wb_ex     ),
-    .wb_pc          (wb_pc     ),
+    .ws_pc          (ws_pc     ),
     .wb_ecode       (wb_ecode  ),
     .wb_esubcode    (wb_esubcode)
     );
