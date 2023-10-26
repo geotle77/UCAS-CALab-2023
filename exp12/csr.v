@@ -2,41 +2,26 @@
 module csr(
     input  wire          clk       ,
     input  wire          reset     ,
-    // // 读端�?
-    input  wire          csr_re    ,
-    input  wire [13:0]   csr_num   ,
+
     output wire [31:0]   csr_rvalue,
-    // 写端�?
-    input  wire          csr_we    ,
-    input  wire [31:0]   csr_wmask ,
-    input  wire [31:0]   csr_wvalue,
-    // 与硬件电路交互的接口信号
-    output wire [31:0]   ex_entry  , //送往pre-IF的异常入口地�?
-    output wire [31:0]   ertn_entry, //送往pre-IF的返回入口地�?
+    output wire [31:0]   ex_entry  ,
+    output wire [31:0]   ertn_entry,
 
-    input  wire          ertn_flush, //来自WB阶段的ertn指令执行有效信号
-    input  wire          wb_ex     , //来自WB阶段的异常处理触发信�?
-    input  wire [ 5:0]   wb_ecode  , //异常类型
-    input  wire [ 8:0]   wb_esubcode,
-    input  wire [31:0]   ws_pc       //写回的返回地�?
+    input  wire          ertn_flush,
+    input  wire          wb_ex     ,
+    input wire [`WS2CSR_BUS_LEN-1 : 0] ws2csr_bus
 );
+    
+    wire csr_re;
+    wire csr_we;
+    wire [13:0] csr_num;
+    wire [31:0] csr_wmask;
+    wire [31:0] csr_wvalue;
+    wire  [31:0] ws_pc;
+    wire [ 5:0] wb_ecode;
+    wire [ 8:0] wb_esubcode;
+    assign {csr_re, csr_we, csr_num, csr_wmask, csr_wvalue, ws_pc, wb_ecode, wb_esubcode} = ws2csr_bus;
 
-// //input wire [160:0] wb2csr_bus,
-//     wire          csr_re    ,
-//     wire [13:0]   csr_num   ,
-//     wire [31:0]   csr_rvalue,
-
-//     wire          csr_we    ,
-//     wire [31:0]   csr_wmask ,
-//     wire [31:0]   csr_wvalue,
-
-//     wire          ertn_flush, //来自WB阶段的ertn指令执行有效信号
-//     wire          wb_ex     , //来自WB阶段的异常处理触发信�?
-//     wire [ 5:0]   wb_ecode  , //异常类型
-//     wire [ 8:0]   wb_esubcode,
-//     wire [31:0]   ws_pc       //写回的返回地�?
-
-    // assign {csr_re, csr_num, csr_rvalue, csr_we, csr_wmask, csr_wvalue, ertn_flush, wb_ex, wb_ecode, wb_esubcode, ws_pc} = wb2csr_bus;
 
 
     // 当前模式信息
@@ -196,7 +181,6 @@ module csr(
     assign csr_crmd_data  = {23'b0, csr_crmd_datm, csr_crmd_datf, csr_crmd_pg, 
                             csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
     assign csr_prmd_data  = {29'b0, csr_prmd_pie, csr_prmd_pplv};
-    //assign csr_ecfg_data  = {19'b0, csr_ecfg_lie};
     assign csr_estat_data = { 1'b0, csr_estat_esubcode, csr_estat_ecode, 3'b0, csr_estat_is};
     assign csr_eentry_data= {csr_eentry_va, 6'b0};
 

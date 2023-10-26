@@ -2,7 +2,6 @@
 module mycpu_top (
   input  wire        clk,
   input  wire        resetn,
-  output reg         reset,
   // inst sram interface
   output wire        inst_sram_en,
   output wire [3:0] inst_sram_we,
@@ -23,17 +22,18 @@ module mycpu_top (
 );
 
 // reg         reset;
+reg         reset;
 always @(posedge clk) reset <= ~resetn;
 
-reg         valid;
-always @(posedge clk) begin
-    if (~resetn) begin
-        valid <= 1'b0;
-    end
-    else begin
-        valid <= 1'b1;
-    end
-end
+//reg         valid;
+//always @(posedge clk) begin
+//    if (~resetn) begin
+//        valid <= 1'b0;
+//    end
+//    else begin
+//        valid <= 1'b1;
+//    end
+//end
 
 
 //wire fs_allowin;
@@ -50,46 +50,31 @@ wire [`FORWARD_BUS_LEN-1:0] exe_forward_zip;
 wire [`FORWARD_BUS_LEN-1:0] mem_forward_zip;
 
 
-//wire mem_rf_we;
-//wire [4:0] mem_dest;
-//wire exe_rf_we;
-//wire [4:0] exe_dest;
-//wire [31:0] alu_result;
-//wire [31:0] final_result;
-
 wire res_from_mul;
 wire exe_res_from_mul;
-wire es_block;//es_inst_is_ld_w;
-wire block;//inst_ld_w;
+wire es_block;
+wire block;
 
-wire [32:0] br_zip;
-wire [37:0] rf_zip;
+wire [`BR_BUS-1:0] br_zip;
+wire [`WB_RF_BUS-1:0] rf_zip;
 
 wire [`FS2DS_BUS_LEN-1:0]   fs2ds_bus;
 wire [`DS2ES_BUS_LEN-1:0]   ds2es_bus;
 wire [`ES2MS_BUS_LEN-1:0]   es2ms_bus;
 wire [`MS2WS_BUS_LEN-1:0]   ms2ws_bus;
+wire [`WS2CSR_BUS_LEN-1 : 0] ws2csr_bus;
 
 wire [67:0] mul_result;
 
-wire        csr_re;
-wire [13:0] csr_num;
 wire [31:0] csr_rvalue;
-wire        csr_we;
-wire [31:0] csr_wmask;
-wire [31:0] csr_wvalue;
 wire [31:0] ex_entry;
 wire [31:0] ertn_entry;
 wire        ertn_flush;
 wire        ms_ex;
 wire        wb_ex;
-wire [ 5:0] wb_ecode;
-wire [ 8:0] wb_esubcode;
 
 wire ms_csr_re;
 wire es_csr_re;
-
-wire [31:0] ws_pc;
 
 IFstage my_if (
   .clk              (clk),
@@ -199,9 +184,7 @@ WBstage my_wb (
   .resetn           (resetn),
   .reset            (reset),
   
-  .ms_allowin       (ms_allowin),
   .ws_allowin       (ws_allowin),
-  .es2ms_valid      (es2ms_valid),
   .ms2ws_valid      (ms2ws_valid),
   
   .ms2ws_bus        (ms2ws_bus),
@@ -212,38 +195,21 @@ WBstage my_wb (
   .debug_wb_rf_wnum (debug_wb_rf_wnum),
   .debug_wb_rf_wdata(debug_wb_rf_wdata),
 
-  .ws_valid         (ws_valid),
-
-  .csr_re           (csr_re),
-  .csr_num          (csr_num),
   .csr_rvalue       (csr_rvalue),
-  .csr_we           (csr_we),
-  .csr_wmask        (csr_wmask),
-  .csr_wvalue       (csr_wvalue),
   .ertn_flush       (ertn_flush),
   .wb_ex            (wb_ex),
-  .ws_pc            (ws_pc),
-  .wb_ecode         (wb_ecode),
-  .wb_esubcode      (wb_esubcode)
+  .ws2csr_bus       (ws2csr_bus)
 );
 
   csr u_csr(
     .clk            (clk       ),
-    .reset          (~resetn   ),
-    .csr_re         (csr_re    ),
-    .csr_num        (csr_num   ),
+    .reset          (reset   ),
     .csr_rvalue     (csr_rvalue),
-    .csr_we         (csr_we    ),
-    .csr_wmask      (csr_wmask ),
-    .csr_wvalue     (csr_wvalue),
-
     .ex_entry       (ex_entry  ),
     .ertn_entry     (ertn_entry),
     .ertn_flush     (ertn_flush),
     .wb_ex          (wb_ex     ),
-    .ws_pc          (ws_pc     ),
-    .wb_ecode       (wb_ecode  ),
-    .wb_esubcode    (wb_esubcode)
+    .ws2csr_bus     (ws2csr_bus)
     );
 
 endmodule
