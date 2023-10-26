@@ -27,7 +27,8 @@ module EXEstage (
   output [67:0] mul_result,
 
   input wire ms_ex,
-  input wire wb_ex
+  input wire wb_ex,
+  output wire es_csr_re
 );
 
 
@@ -111,6 +112,12 @@ always @(posedge clk)begin
     end
 end
 //////////assign//////////
+
+
+assign es_csr_re = exe_except_zip[1];
+
+
+
 alu u_alu(
     .clk        (clk        ),
     .resetn     (resetn     ),
