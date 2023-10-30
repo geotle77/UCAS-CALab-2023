@@ -3,10 +3,10 @@ module DIV(
     input  wire    resetn,
     input  wire    div_en,
     input  wire    sign,
-    input  wire [31:0] divisor,   //¨¨??¨¦?¡è???
-    input  wire [31:0] dividend,   //¨¦?¡è??¡ã
+    input  wire [31:0] divisor,   
+    input  wire [31:0] dividend,  
     output wire [63:0] result,
-    output wire    complete //¨¦?¡è??????????????¡¤
+    output wire    complete 
 );
 
     wire [31:0] quotient;
@@ -64,7 +64,7 @@ module DIV(
         if(~resetn)
             remainder_reg <= 33'b0;
         if(div_en & ~complete) begin
-            if(~|counter)   //?????¡ã????¡ì????
+            if(~|counter)   
                 remainder_reg <= {32'b0, divisor_abs[31]};
             else
                 remainder_reg <=  (counter[5]&(~|counter[4:0])) ? recover_r : {recover_r, divisor_pad[31 - counter]};
