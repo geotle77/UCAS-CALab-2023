@@ -1,3 +1,4 @@
+`include "BUS_LEN.vh"
 module MEMstage (
   input wire clk,
   input wire resetn,
@@ -11,8 +12,8 @@ module MEMstage (
   
   input wire [`ES2MS_BUS_LEN-1:0] es2ms_bus,
   output wire [`MS2WS_BUS_LEN-1:0] ms2ws_bus,
-
   output wire [`FORWARD_BUS_LEN-1:0] mem_forward_zip,
+  
   input wire exe_res_from_mul,
   input [67:0] mul_result,
 
@@ -32,17 +33,17 @@ wire exe_gr_we;
 wire [`EXCEPT_LEN-1 : 0] except_zip;
 assign {es_pc, mul_op, alu_result, load_op, exe_dest, exe_gr_we ,except_zip} = es2ms_bus;
 
-reg [31:0] ms_pc;
-reg mem_gr_we;
-reg [`EXCEPT_LEN-1 : 0] mem_except_zip;
-assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result, mem_except_zip};
-
 wire mem_rf_we;
 reg [4:0] mem_dest_reg;
 wire[4:0] mem_dest;
 wire [31:0] final_result;
 assign mem_dest=mem_dest_reg;
 assign mem_forward_zip = {mem_rf_we, mem_dest, final_result};
+
+reg [31:0] ms_pc;
+reg mem_gr_we;
+reg [`EXCEPT_LEN-1 : 0] mem_except_zip;
+assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result, mem_except_zip};
 //////////declaration//////////
 
 reg [18:0] mem_alu_op;

@@ -8,7 +8,7 @@ module IDstage (
   input wire fs2ds_valid,
   output wire ds2es_valid,
   //branch  control signals
-  output wire [32:0] br_zip,
+  output wire [`BR_BUS-1:0] br_zip,
   input wire [`WB_RF_BUS-1:0] rf_zip,
   output wire[`DS2ES_BUS_LEN-1:0] ds2es_bus,
   input wire [`FS2DS_BUS_LEN-1:0] fs2ds_bus,
@@ -63,6 +63,8 @@ wire gr_we;
 wire [4:0] dest;
 wire mem_we;
 wire [`EXCEPT_LEN-1 : 0] ds_except_zip;
+wire [4:0] load_op;
+wire [2:0] store_op;
 assign ds2es_bus = {ds_pc, alu_src1, alu_src2, alu_op, mul_op, load_op, store_op, rkd_value, gr_we, dest, ds_except_zip/*82bits*/};
 
 //////////declaration////////
@@ -73,8 +75,8 @@ reg ds_valid;
 // wire [31:0] br_target;
 
 // wire [11:0] alu_op;
-wire [4:0] load_op;
-wire [2:0] store_op;
+//wire [4:0] load_op;
+//wire [2:0] store_op;
 wire src1_is_pc;
 wire src2_is_imm;
 wire dst_is_r1;
@@ -122,7 +124,7 @@ wire inst_slli_w;
 wire inst_srli_w;
 wire inst_srai_w;
 wire inst_addi_w;
-//wire inst_ld_w;
+wire inst_ld_w;
 wire inst_st_w;
 wire inst_jirl;
 wire inst_b;
@@ -142,6 +144,7 @@ wire inst_sltui;
 wire inst_slti;
 wire inst_andi;
 wire inst_ori;
+wire inst_xori;
 wire inst_sll_w;
 wire inst_srl_w;
 wire inst_sra_w;
