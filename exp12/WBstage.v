@@ -16,7 +16,7 @@ module WBstage (
   output wire [4:0] debug_wb_rf_wnum,
   output wire [31:0] debug_wb_rf_wdata,
   
-  output wire ertn_flush,
+  output wire ws_reflush,
   output wire wb_ex,
   input  wire [31:0] csr_rvalue
 );
