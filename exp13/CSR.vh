@@ -1,22 +1,12 @@
-`ifndef BUS_LEN
-    `define BUS_LEN
-
-    `define FS2DS_BUS_LEN 64  //fs_pc, inst
-    `define FORWARD_BUS_LEN 38
-    `define DS2ES_BUS_LEN 244 //es_pc, alu_src1, alu_src2, alu_op,load_op,store_op, rkd_value, gr_we, dest, mem_we,except_zip
-    `define ES2MS_BUS_LEN 160//ms_pc, mul_op,mem_gr_we, mem_dest, final_result,except_zip
-    `define MS2WS_BUS_LEN 152
-    `define WS2CSR_BUS_LEN 127
-    
-    `define FORWARD_BUS_LEN 38
+`ifndef CSR 
+    `define WS2CSR_BUS_LEN 200
     
     `define EXCEPT_LEN 82
     `define ALU_OP_LEN 19
     `define WB_RF_BUS 38
     `define BR_BUS 33
-    
-    
-        `define CSR_CRMD   14'h00
+   
+    `define CSR_CRMD   14'h00
     `define CSR_PRMD   14'h01
     `define CSR_EUEN   14'h02
     `define CSR_ECFG   14'h04
@@ -43,4 +33,19 @@
     `define CSR_EENTRY_VA   31:6
     `define CSR_SAVE_DATA   31:0
     `define CSR_TID_TID     31:0
+    `define CSR_TICLR_CLR   0
+    // exp13
+    
+    `define CSR_TCFG_EN     0
+    `define CSR_TCFG_PERIOD 1
+    `define CSR_TCFG_INITV  31:2
+    
+    `define ECODE_INT       6'h0
+    `define ECODE_ADE       6'h8
+    `define ECODE_ALE       6'h9
+    `define ECODE_BRK       6'hc
+    `define ECODE_INE       6'hd
+    `define ESUBCODE_ADEF   9'h0
+    `define ECODE_SYS       6'hb
+    
 `endif

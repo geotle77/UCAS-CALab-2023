@@ -11,16 +11,15 @@ module EXEstage (
   
   input wire [`DS2ES_BUS_LEN-1:0] ds2es_bus,
   output wire [`ES2MS_BUS_LEN-1:0] es2ms_bus,
+  output wire [`FORWARD_BUS_LEN-1:0]   exe_forward_zip,
   
   output wire data_sram_en,
   output wire [3:0] data_sram_we,
   output wire [31:0] data_sram_addr,
   output wire [31:0] data_sram_wdata,
 
-  output wire [`FORWARD_BUS_LEN-1:0]   exe_forward_zip,
-
-  output reg es_block,//es_inst_is_ld_w,
-  input wire block,//inst_ld_w,
+  output reg es_block,
+  input wire block,
   
   input wire res_from_mul,
   output reg exe_res_from_mul,
@@ -47,6 +46,7 @@ wire [`EXCEPT_LEN-1 : 0] except_zip;
 assign {ds_pc, alu_src1, alu_src2, alu_op, mul_op,  load_op, store_op, rkd_value, gr_we, dest, except_zip} = ds2es_bus;
 reg [4:0] exe_dest;
 wire [31:0] alu_result;
+wire exe_rf_we;
 assign exe_forward_zip={exe_rf_we, exe_dest, alu_result};
 reg [31:0] es_pc;
 wire [4:0] exe_load_op;
@@ -66,6 +66,8 @@ reg [31:0] alu_src2_reg;
 reg [4:0]  load_op_reg;
 reg [2:0]  store_op_reg;
 reg [31:0] rkd_value_reg;
+
+wire alu_flag;
 
 //////////pipeline////////
 wire es_ready_go;

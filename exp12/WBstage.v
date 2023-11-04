@@ -1,33 +1,24 @@
+`include "BUS_LEN.vh"
 module WBstage (
   input wire clk,
   input wire resetn,
   input wire reset,
   
-  input wire ms_allowin,
   output wire ws_allowin,
-  input wire es2ms_valid,
-  output wire ms2ws_valid,
+  input wire ms2ws_valid,
   
   input wire [`MS2WS_BUS_LEN-1:0] ms2ws_bus,  
-  output wire [`MS2WS_BUS_LEN-1:0] rf_zip,
+  output wire [`WB_RF_BUS-1:0] rf_zip,
+  output wire [`WS2CSR_BUS_LEN-1 : 0] ws2csr_bus,
 
   output wire [31:0] debug_wb_pc,
   output wire [3:0] debug_wb_rf_we,
   output wire [4:0] debug_wb_rf_wnum,
   output wire [31:0] debug_wb_rf_wdata,
-
-  output reg ws_valid,
-  output wire csr_re,
-  output wire [13:0] csr_num,
-  input  wire [31:0] csr_rvalue,
-  output wire csr_we,
-  output wire [31:0] csr_wmask,
-  output wire [31:0] csr_wvalue,
-  output wire ertn_flush,
+  
+  output wire ws_reflush,
   output wire wb_ex,
-  output reg  [31:0] ws_pc,
-  output wire [ 5:0] wb_ecode,
-  output wire [ 8:0] wb_esubcode
+  input  wire [31:0] csr_rvalue
 );
 
 //////////zip//////////
@@ -44,8 +35,18 @@ wire [31:0] final_result;
 wire [`EXCEPT_LEN-1 : 0] except_zip;
 assign {ms_pc, mem_gr_we, mem_dest, final_result, except_zip} = ms2ws_bus;
 
+wire csr_re;
+wire csr_we;
+wire [13:0] csr_num;
+wire [31:0] csr_wmask;
+wire [31:0] csr_wvalue;
+reg  [31:0] ws_pc;
+wire [ 5:0] wb_ecode;
+wire [ 8:0] wb_esubcode;
+assign ws2csr_bus = {csr_re, csr_we, csr_num, csr_wmask, csr_wvalue, ws_pc, wb_ecode, wb_esubcode};
+
 //////////declaration////////
-reg [31:0] ws_pc;
+reg ws_valid;
 reg [31:0] final_result_reg;
 reg gr_we_reg;
 reg [`EXCEPT_LEN-1 : 0] wb_except_zip;

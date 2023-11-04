@@ -4,7 +4,7 @@ module mycpu_top (
   input  wire        resetn,
   // inst sram interface
   output wire        inst_sram_en,
-  output wire [3:0] inst_sram_we,
+  output wire [3:0]  inst_sram_we,
   output wire [31:0] inst_sram_addr,
   output wire [31:0] inst_sram_wdata,
   input  wire [31:0] inst_sram_rdata,
@@ -21,19 +21,8 @@ module mycpu_top (
   output wire [31:0] debug_wb_rf_wdata
 );
 
-// reg         reset;
 reg         reset;
 always @(posedge clk) reset <= ~resetn;
-
-//reg         valid;
-//always @(posedge clk) begin
-//    if (~resetn) begin
-//        valid <= 1'b0;
-//    end
-//    else begin
-//        valid <= 1'b1;
-//    end
-//end
 
 
 //wire fs_allowin;
@@ -48,15 +37,11 @@ wire ms2ws_valid;
 
 wire [`FORWARD_BUS_LEN-1:0] exe_forward_zip;
 wire [`FORWARD_BUS_LEN-1:0] mem_forward_zip;
-
-
-wire res_from_mul;
-wire exe_res_from_mul;
-wire es_block;
-wire block;
-
 wire [`BR_BUS-1:0] br_zip;
 wire [`WB_RF_BUS-1:0] rf_zip;
+
+wire es_block;
+wire block;
 
 wire [`FS2DS_BUS_LEN-1:0]   fs2ds_bus;
 wire [`DS2ES_BUS_LEN-1:0]   ds2es_bus;
@@ -66,22 +51,22 @@ wire [`WS2CSR_BUS_LEN-1 : 0] ws2csr_bus;
 
 wire [67:0] mul_result;
 
-wire [31:0] csr_rvalue;
-wire [31:0] ex_entry;
-wire [31:0] ertn_entry;
+wire [31:0] csr_ex_entry;
+wire [31:0] csr_ertn_entry;
+wire [31:0]csr_rvalue;
 wire        ertn_flush;
 wire        ms_ex;
 wire        wb_ex;
 
 wire ms_csr_re;
 wire es_csr_re;
-
+wire ds_has_int;
+wire ws_reflush;
+wire ms_ex_to_es;
+wire csr_has_int;
 IFstage my_if (
   .clk              (clk),
   .resetn           (resetn),
-  
-  .ds_allowin       (ds_allowin),
-  .fs2ds_valid      (fs2ds_valid),
   
   .inst_sram_en     (inst_sram_en),
   .inst_sram_we     (inst_sram_we),
@@ -91,11 +76,15 @@ IFstage my_if (
   
   .br_zip           (br_zip),
   .fs2ds_bus        (fs2ds_bus),
-
-  .ex_entry         (ex_entry  ),
-  .ertn_entry       (ertn_entry),
+  .ds_allowin       (ds_allowin),
+  .fs2ds_valid      (fs2ds_valid),
+  
+  .csr_ex_entry     (csr_ex_entry  ),
+  .csr_ertn_entry   (csr_ertn_entry),
   .ertn_flush       (ertn_flush),
-  .wb_ex            (wb_ex     )
+  .wb_ex            (wb_ex     ),
+
+  .fs_reflush       (ws_reflush)
 );
 
 IDstage my_id (
@@ -109,20 +98,19 @@ IDstage my_id (
 
   .br_zip           (br_zip),
   .ds2es_bus        (ds2es_bus),
-  .rf_zip           (rf_zip),
   .fs2ds_bus        (fs2ds_bus),
 
   .mem_forward_zip  (mem_forward_zip),
   .exe_forward_zip  (exe_forward_zip),
-  
-  .res_from_mul     (res_from_mul),
+  .rf_zip           (rf_zip),
+
   .es_block         (es_block),
   .block            (block),
 
-  .ms_ex            (ms_ex),
-  .wb_ex            (wb_ex | ertn_flush),
   .ms_csr_re        (ms_csr_re),
-  .es_csr_re        (es_csr_re)
+  .es_csr_re        (es_csr_re),
+  .ds_has_int       (csr_has_int),
+  .ds_reflush       (ws_reflush)
 );
 
 EXEstage my_exe (
@@ -145,15 +133,14 @@ EXEstage my_exe (
 
   .exe_forward_zip  (exe_forward_zip),
 
-  .res_from_mul     (res_from_mul),
-  .exe_res_from_mul (exe_res_from_mul),
   .es_block         (es_block),
   .block            (block),
+
   .mul_result       (mul_result),
 
-  .ms_ex            (ms_ex),
-  .wb_ex            (wb_ex | ertn_flush),
-  .es_csr_re        (es_csr_re)
+  .ms_ex_to_es      (ms_ex_to_es),
+  .es_csr_re        (es_csr_re),
+  .es_reflush       (ws_reflush)
 );
 
 MEMstage my_mem (
@@ -169,13 +156,12 @@ MEMstage my_mem (
   
   .es2ms_bus        (es2ms_bus),
   .ms2ws_bus        (ms2ws_bus),
-  
-  .exe_res_from_mul (exe_res_from_mul),
   .mem_forward_zip  (mem_forward_zip),
+
   .mul_result       (mul_result),
 
-  .ms_ex            (ms_ex),
-  .wb_ex            (wb_ex | ertn_flush),
+  .ms_ex_to_es      (ms_ex_to_es),
+  .ms_reflush       (ws_reflush),
   .ms_csr_re        (ms_csr_re)
 );
 
@@ -196,8 +182,9 @@ WBstage my_wb (
   .debug_wb_rf_wdata(debug_wb_rf_wdata),
 
   .csr_rvalue       (csr_rvalue),
-  .ertn_flush       (ertn_flush),
-  .wb_ex            (wb_ex),
+  .ws_ertn_flush       (ertn_flush),
+  .ws_reflush       (ws_reflush),
+  .ws_ex            (wb_ex),
   .ws2csr_bus       (ws2csr_bus)
 );
 
@@ -205,11 +192,12 @@ WBstage my_wb (
     .clk            (clk       ),
     .reset          (reset   ),
     .csr_rvalue     (csr_rvalue),
-    .ex_entry       (ex_entry  ),
-    .ertn_entry     (ertn_entry),
+    .ex_entry       (csr_ex_entry  ),
+    .ertn_entry     (csr_ertn_entry),
     .ertn_flush     (ertn_flush),
     .wb_ex          (wb_ex     ),
-    .ws2csr_bus     (ws2csr_bus)
+    .ws2csr_bus     (ws2csr_bus),
+    .has_int        (csr_has_int) 
     );
 
 endmodule

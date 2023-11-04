@@ -51,7 +51,7 @@ module DIV(
         end
     end
 
-    assign pre_r = remainder_reg - dividend_pad;                  
+    assign pre_r =  remainder_reg - dividend_pad;                  
     assign recover_r = pre_r[32] ? remainder_reg : pre_r;    
     always @(posedge clk) begin
         if(~resetn) 
@@ -70,7 +70,9 @@ module DIV(
                 remainder_reg <=  (counter[5]&(~|counter[4:0])) ? recover_r : {recover_r, divisor_pad[31 - counter]};
         end
     end
+    
     assign quotient = sign & sign_s ? (~quotient_reg+1'b1) : quotient_reg;
     assign remainder = sign & sign_r ? (~remainder_reg+1'b1) : remainder_reg;
-    assign result ={quotient,remainder};
+    
+    assign result = (|divisor) ? {quotient,remainder} :{32'b0,remainder }; 
 endmodule
