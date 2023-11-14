@@ -50,8 +50,26 @@ wire [31: 0]ws_rkd_value;
 wire  [ 7:0] ws_hw_int_in  = 8'b0 ;
 wire         ws_ipi_int_in = 1'b0 ;
 wire  [31:0] ws_coreid_in  = 32'b0;
-assign ws2csr_bus = {ws_csr_re, ws_csr_we, ws_csr_num, ws_csr_wmask, ws_csr_wvalue, ws_pc, ws_ecode, ws_esubcode,ws_ipi_int_in,ws_coreid_in,ws_hw_int_in,ws_wrong_addr};
-assign {ws_pc, ws_gr_we, ws_dest, ws_final_result,ws_rkd_value, ws_exc_data} = ms2ws_bus_reg;
+assign ws2csr_bus = {ws_csr_re, 
+                    ws_csr_we, 
+                    ws_csr_num, 
+                    ws_csr_wmask, 
+                    ws_csr_wvalue, 
+                    ws_pc, 
+                    ws_ecode, 
+                    ws_esubcode,
+                    ws_ipi_int_in,
+                    ws_coreid_in,
+                    ws_hw_int_in,
+                    ws_wrong_addr
+                    };
+assign {ws_pc, 
+        ws_gr_we, 
+        ws_dest, 
+        ws_final_result,
+        ws_rkd_value, 
+        ws_exc_data
+        } = ms2ws_bus_reg;
 //////////declaration////////
 reg ws_valid;
 //////////pipeline//////////

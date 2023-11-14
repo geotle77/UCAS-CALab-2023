@@ -19,7 +19,7 @@ module IDstage (
   
   input wire es_block,
   input wire es_mem_block,
-  output wire block,
+  output wire mul_block,
   input wire ms_mem_block,
 
   input wire es_csr_re,
@@ -33,7 +33,10 @@ module IDstage (
 wire br_stall;
 wire br_taken;
 wire [31:0] br_target;
-assign br_zip = {br_stall, br_taken, br_target};
+assign br_zip = {br_stall, //33:33
+                 br_taken, //32:32
+                 br_target //31:0
+                 };
 
 //forward data from exe,mem,wb
 wire rf_we;
@@ -46,8 +49,8 @@ wire [4:0] exe_dest;
 wire [4:0] mem_dest;
 wire [31:0] alu_result;
 wire [31:0] final_result;
-assign {exe_rf_we, exe_dest, alu_result}   = exe_forward_zip;
-assign {mem_rf_we, mem_dest, final_result} = mem_forward_zip;
+assign {exe_rf_we, exe_dest, alu_result}   = exe_forward_zip;//waiting to add the es_mem_block
+assign {mem_rf_we, mem_dest, final_result} = mem_forward_zip;//waiting to add the ms_mem_block
 
 //exception data from fs
 wire [`FS_EXC_DATA_WD-1:0]fs_exc_data;
@@ -69,7 +72,20 @@ wire mem_we;
 wire [4:0] load_op;
 wire [2:0] store_op;
 wire res_from_mul;
-assign ds2es_bus = {ds_pc,res_from_mul, alu_src1, alu_src2, alu_op, mul_op, load_op, store_op, rkd_value, gr_we, dest, ds_exc_data/*98bits*/,time_op};
+assign ds2es_bus = {ds_pc,          //230:261
+                    res_from_mul,   //229:229
+                    alu_src1,       //197:228
+                    alu_src2,       //165:196
+                    alu_op,         //149:164
+                    mul_op,         //146:148
+                    load_op,        //141:145
+                    store_op,       //138:140
+                    rkd_value,      //106:137
+                    gr_we,          //105:105
+                    dest,           //100:104
+                    ds_exc_data,    //2:99
+                    time_op         //1:0
+                    };
 
 //////////declaration////////
 reg ds_valid;
@@ -421,8 +437,6 @@ regfile u_regfile(
     .wdata  (rf_wdata )
     );
 
-//assign rj_value  = rf_rdata1;
-//assign rkd_value = rf_rdata2;
 assign rj_value = 
     (exe_rf_we && exe_dest == rf_raddr1 && |rf_raddr1)? alu_result :
     (mem_rf_we && mem_dest == rf_raddr1 && |rf_raddr1)? final_result :
@@ -458,8 +472,8 @@ assign br_target = (inst_beq || inst_bne || inst_bl || inst_b ||
 assign alu_src1 = src1_is_pc  ? ds_pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
 
-assign block = (|load_op) || res_from_mul;
-
+assign mul_block = (|load_op) || res_from_mul;
+//------------------exception------------------
 assign ds_ine = ~ ( inst_add_w     | inst_sub_w   | inst_slt     | inst_sltu      |
                  inst_nor       | inst_and     | inst_or      | inst_xor       |   
                  inst_slli_w    | inst_srli_w  | inst_srai_w  | inst_addi_w    | 
@@ -474,8 +488,8 @@ assign ds_ine = ~ ( inst_add_w     | inst_sub_w   | inst_slt     | inst_sltu    
                  inst_st_b      | inst_st_h    | inst_csrrd   | inst_csrwr     |
                  inst_csrxchg   | inst_ertn    | inst_syscall | inst_break     |
                  inst_rdcntvl   | inst_rdcntvh | inst_rdcntid );
-assign ds_csr_re    = inst_csrrd | inst_csrwr | inst_csrxchg |inst_rdcntid;//读使能信�??
-assign ds_csr_we    = inst_csrwr | inst_csrxchg;//写使能信�??
+assign ds_csr_re    = inst_csrrd | inst_csrwr | inst_csrxchg |inst_rdcntid;//
+assign ds_csr_we    = inst_csrwr | inst_csrxchg;//
 assign ds_csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
 assign csr_wvalue   = rkd_value;
 assign ds_csr_num   = {14{inst_rdcntid}} & `CSR_TID | {14{~inst_rdcntid}} & ds_inst[23:10];
@@ -489,6 +503,16 @@ assign ds_ecode = ds_has_int   ? `ECODE_INT
                 : inst_break   ? `ECODE_BRK
                 : inst_syscall ? `ECODE_SYS : 6'b0;
 assign ds_esubcode = ds_adef ? `ESUBCODE_ADEF : 9'b0;
-assign ds_exc_data = {ds_adef, ds_wrong_addr, ds_csr_re,ds_csr_we, ds_csr_wmask,ds_csr_num, ds_ertn_flush, ds_ex, ds_esubcode, ds_ecode};
+assign ds_exc_data = {ds_adef,      //97:97
+                     ds_wrong_addr, //96:65
+                     ds_csr_re,     //64:64
+                     ds_csr_we,     //63:63
+                     ds_csr_wmask,  //62:31 
+                     ds_csr_num,    //30:17
+                     ds_ertn_flush, //16:16
+                     ds_ex,         //15:15
+                     ds_esubcode,   //14:6
+                     ds_ecode       //5:0
+                     };
 
 endmodule

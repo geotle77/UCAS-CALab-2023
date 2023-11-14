@@ -51,7 +51,7 @@ wire [`WB_RF_BUS-1:0] rf_zip;
 wire es_block;
 wire es_mem_block;
 wire ms_mem_block;
-wire block;
+wire mul_block;
 
 wire [`FS2DS_BUS_LEN-1:0]   fs2ds_bus;
 wire [`DS2ES_BUS_LEN-1:0]   ds2es_bus;
@@ -121,7 +121,7 @@ IDstage my_id (
   .es_block         (es_block),
   .es_mem_block     (es_mem_block),
   .ms_mem_block     (ms_mem_block),
-  .block            (block),
+  .mul_block            (mul_block),
 
   .ms_csr_re        (ms_csr_re),
   .es_csr_re        (es_csr_re),
@@ -154,7 +154,7 @@ EXEstage my_exe (
 
   .es_block         (es_block),
   .es_mem_block     (es_mem_block),
-  .block            (block),
+  .mul_block            (mul_block),
 
   .mul_result       (mul_result),
 

@@ -24,7 +24,7 @@ module EXEstage (
 
   output reg es_block,
   output wire es_mem_block,
-  input wire block,
+  input wire mul_block,
   
   output wire [67:0] mul_result,
 
@@ -82,8 +82,33 @@ wire [ 5:0] ds_ecode       ;
 wire [ 5:0] es_ecode       ;
 wire es_res_from_mul        ;
 wire es_res_from_mem        ;
-assign {es_pc,es_res_from_mul, es_alu_src1, es_alu_src2, es_alu_op, es_mul_op,  es_load_op, es_store_op, es_rkd_value, es_gr_we, es_dest, ds_exc_data,es_time_op} = ds2es_bus_reg;
-assign es2ms_bus = {es_mem_we,es_res_from_mem,es_pc,es_res_from_mul,es_mul_op,es_final_result, es_load_op, es_dest, es_gr_we,es_rkd_value,es_exc_data};
+assign {es_pc,
+        es_res_from_mul, 
+        es_alu_src1, 
+        es_alu_src2, 
+        es_alu_op, 
+        es_mul_op,  
+        es_load_op, 
+        es_store_op, 
+        es_rkd_value, 
+        es_gr_we, 
+        es_dest, 
+        ds_exc_data,
+        es_time_op
+        } = ds2es_bus_reg;
+
+assign es2ms_bus = {es_mem_we,
+                    es_res_from_mem,
+                    es_pc,
+                    es_res_from_mul,
+                    es_mul_op,
+                    es_final_result, 
+                    es_load_op, 
+                    es_dest, 
+                    es_gr_we,
+                    es_rkd_value,
+                    es_exc_data};
+
 assign ld_ale  =  es_load_op[1] &es_alu_result[0]                        // inst_ld_h
                 | es_load_op[2] & (es_alu_result[1] |es_alu_result[0])   // inst_ld_w
                 | es_load_op[4] & es_alu_result[0] ;                      // inst_ld_hu
@@ -107,27 +132,27 @@ assign es_wrong_addr = es_adef ? ds_wrong_addr : es_alu_result;
 assign es_ecode   = es_ale ? `ECODE_ALE : ds_ecode;
 assign es_ex      = (ds_ex | es_ale) & es_valid;
 
-assign {es_adef,         // 98
-        ds_wrong_addr,   // 97:66
-        es_csr_re,       // 65
-        es_csr_we,       // 64
-        es_csr_wmask,    // 63:32
-        es_csr_num,      // 31:17
+assign {es_adef,         // 97
+        ds_wrong_addr,   // 96:65
+        es_csr_re,       // 64
+        es_csr_we,       // 63
+        es_csr_wmask,    // 62:31
+        es_csr_num,      // 30:17
         es_ertn_flush,   // 16
         ds_ex,           // 15
         es_esubcode,     // 14:6
         ds_ecode         // 5:0
         } = ds_exc_data;
 
-assign es_exc_data = {es_wrong_addr,         
-                     es_csr_we,                  
-                     es_csr_wmask,                        
-                     es_csr_num,                  
-                     es_ertn_flush,              
-                     es_ex,                       
-                     es_esubcode ,               
-                     es_ecode,
-                     es_csr_re                    
+assign es_exc_data = {es_wrong_addr, //60:91         
+                     es_csr_we,      //59            
+                     es_csr_wmask,   //27:58                     
+                     es_csr_num,     //13:26             
+                     es_ertn_flush,  //12            
+                     es_ex,         // 11             
+                     es_esubcode ,  // 2:10       
+                     es_ecode,      // 6:1
+                     es_csr_re      //0           
                     };
 //////////pipeline////////
 wire es_ready_go;
@@ -155,7 +180,7 @@ end
 
 always @(posedge clk)begin
     if(ds2es_valid && es_allowin)begin
-        if(block)begin
+        if(mul_block)begin
             es_block <= 1'b1;
         end
         else begin

@@ -38,13 +38,32 @@ wire [31:0] mem_rkd_value;
 wire [`ES_EXC_DATA_WD-1 : 0] mem_exc_data;
 wire mem_res_from_mul;
 reg[`ES2MS_BUS_LEN-1:0] es2ms_bus_reg;
-assign {mem_we,mem_res_from_mem,ms_pc,mem_res_from_mul,mem_mul_op, mem_alu_result, mem_load_op, mem_dest, mem_gr_we,mem_rkd_value,mem_exc_data} = es2ms_bus_reg;
+assign {mem_we,
+        mem_res_from_mem,
+        ms_pc,
+        mem_res_from_mul,
+        mem_mul_op, 
+        mem_alu_result, 
+        mem_load_op, 
+        mem_dest, 
+        mem_gr_we,
+        mem_rkd_value,
+        mem_exc_data
+        } = es2ms_bus_reg;
 
 wire mem_rf_we;
 wire [31:0] mem_final_result;
-assign mem_forward_zip = {mem_rf_we, mem_dest, mem_final_result};
+assign mem_forward_zip = {mem_rf_we, 
+                          mem_dest, 
+                          mem_final_result
+                          };
 
-assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, mem_final_result, mem_rkd_value,mem_exc_data};
+assign ms2ws_bus = {ms_pc, 
+                    mem_gr_we, 
+                    mem_dest, 
+                    mem_final_result, 
+                    mem_rkd_value,
+                    mem_exc_data};
 //////////declaration//////////
 
 wire [31:0]mem_result;
