@@ -237,7 +237,7 @@ assign mem_we=(|es_store_op);
 assign es_mem_we = mem_we & ~es_reflush & ~ms_ex_to_es & ~st_ale;
 assign es_rf_we = es_valid && es_gr_we;
 
-assign data_sram_en    =  ~es_finish && es_need_mem ;//1'b1;
+assign data_sram_en    =  ~es_finish && es_need_mem && ms_allowin;//1'b1;
 assign data_sram_size  = (es_store_op[0] | es_load_op[0] | es_load_op[3]) ? 2'b00   // load b, bu or store b
                        : (es_store_op[1] | es_load_op[1] | es_load_op[4]) ? 2'b01   // load h, hu or store h
                        : 2'b10;

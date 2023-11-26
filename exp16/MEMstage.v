@@ -79,6 +79,8 @@ assign ms_ready_go = ms_need_mem && data_sram_data_ok ||  ~ms_need_mem;
 assign ms_allowin = ~ms_valid || ms_ready_go && ws_allowin;
 assign ms2ws_valid = ms_valid && ms_ready_go;
 
+wire mem_need_mem;
+assign mem_need_mem = ms_valid && (mem_res_from_mem || mem_we);
 always @(posedge clk) begin
   if (reset) begin
     ms_valid <= 1'b0;
