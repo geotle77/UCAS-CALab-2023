@@ -193,7 +193,7 @@ assign es_res_from_mem = |es_load_op & ~ms_ex_to_es & ~es_reflush & ~ld_ale;
 assign es_mem_block = (es_res_from_mem || (es_csr_re | es_csr_we) )& es_valid;
 
 
-//--
+//---if addr_ok is always 1'b1,may cause 
 reg es_finish; 
 always @(posedge clk) begin
     if(reset)
