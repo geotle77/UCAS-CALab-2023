@@ -63,3 +63,5 @@ The exp10 is to implement **MUL** module and make it work.
 - 2023/11/13 21:00 上板验证通过， exp14结束
 
 ## exp15 实验流水账
+## exp17 实验流水账
+- 2023/11/30 18：00 开始撰写exp17部分代码，仿真及上板通过后完成该部分实验
