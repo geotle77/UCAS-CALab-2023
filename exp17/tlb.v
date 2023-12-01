@@ -98,7 +98,7 @@ reg        tlb_v1   [TLBNUM-1:0];
 // read port
 assign r_e    = tlb_e    [r_index];
 assign r_vppn = tlb_vppn [r_index];
-assign r_ps   = tlb_ps4MB[r_index] ? 6'd22 : 6'd12;
+assign r_ps   = tlb_ps4MB[r_index] ? 6'd21 : 6'd12;
 assign r_asid = tlb_asid [r_index];
 assign r_g    = tlb_g    [r_index];
 // even
@@ -118,7 +118,7 @@ assign r_v1   = tlb_v1   [r_index];
 always @(posedge clk) begin
     if(we) begin
         tlb_e    [w_index] <= w_e;
-        tlb_ps4MB[w_index] <= w_ps == 6'd22;
+        tlb_ps4MB[w_index] <= w_ps == 6'd21;
         tlb_vppn [w_index] <= w_vppn;
         tlb_asid [w_index] <= w_asid;
         tlb_g    [w_index] <= w_g;
@@ -143,12 +143,12 @@ wire [TLBNUM - 1: 0] match0;
 wire [TLBNUM - 1: 0] match1;
 genvar i;
 generate for(i = 0; i < TLBNUM; i = i + 1) begin
-        assign match0[i] = (s0_vppn[18:10] == tlb_vppn[i][18:10])
-                        && (tlb_ps4MB[i] || s0_vppn[9:0] == tlb_vppn[i][9:0])
+        assign match0[i] = (s0_vppn[18:9] == tlb_vppn[i][18:9])
+                        && (tlb_ps4MB[i] || s0_vppn[8:0] == tlb_vppn[i][8:0])
                         && ((s0_asid == tlb_asid[i]) || tlb_g[i]);
         
-        assign match1[i] = (s1_vppn[18:10] == tlb_vppn[i][18:10])
-                        && (tlb_ps4MB[i] || s1_vppn[9:0] == tlb_vppn[i][9:0])
+        assign match1[i] = (s1_vppn[18:9] == tlb_vppn[i][18:9])
+                        && (tlb_ps4MB[i] || s1_vppn[8:0] == tlb_vppn[i][8:0])
                         && ((s1_asid == tlb_asid[i]) || tlb_g[i]);
 end
 endgenerate
@@ -176,8 +176,8 @@ assign s0_index =   match0[ 1] ? 4'd1  :
                     match0[15] ? 4'd15 :
                     4'd0; // Default, 没有找到时需要把found置为0
 
-assign s0_odd = tlb_ps4MB[s0_index] ? s0_vppn[9] : s0_va_bit12; //whether the odd page hit
-assign s0_ps = tlb_ps4MB[s0_index] ? 6'd22 : 6'd12;
+assign s0_odd = tlb_ps4MB[s0_index] ? s0_vppn[8] : s0_va_bit12; //whether the odd page hit
+assign s0_ps = tlb_ps4MB[s0_index] ? 6'd21 : 6'd12;
 assign s0_ppn = s0_odd ? tlb_ppn1[s0_index] : tlb_ppn0[s0_index];
 assign s0_plv = s0_odd ? tlb_plv1[s0_index] : tlb_plv0[s0_index];
 assign s0_mat = s0_odd ? tlb_mat1[s0_index] : tlb_mat0[s0_index];
@@ -204,8 +204,8 @@ assign s1_index =   match1[ 1] ? 4'd1  :
                     match1[15] ? 4'd15 :
                     4'd0; // Default, 没有找到时需要把found置为0
 
-assign s1_odd = tlb_ps4MB[s1_index] ? s1_vppn[9] : s1_va_bit12;
-assign s1_ps = tlb_ps4MB[s1_index] ? 6'd22: 6'd12;
+assign s1_odd = tlb_ps4MB[s1_index] ? s1_vppn[8] : s1_va_bit12;
+assign s1_ps = tlb_ps4MB[s1_index] ? 6'd21: 6'd12;
 assign s1_ppn = s1_odd ? tlb_ppn1[s1_index] : tlb_ppn0[s1_index];
 assign s1_plv = s1_odd ? tlb_plv1[s1_index] : tlb_plv0[s1_index];
 assign s1_mat = s1_odd ? tlb_mat1[s1_index] : tlb_mat0[s1_index];
@@ -219,7 +219,7 @@ generate for(i = 0; i < TLBNUM; i = i + 1) begin
         assign cond[i][0] = ~tlb_g[i];
         assign cond[i][1] = tlb_g[i];
         assign cond[i][2] = s1_asid == tlb_asid[i];
-        assign cond[i][3] = (s1_vppn[18:10] == tlb_vppn[i][18:10]) && (tlb_ps4MB[i] || s1_vppn[9:0] == tlb_vppn[i][9:0]);
+        assign cond[i][3] = (s1_vppn[18:9] == tlb_vppn[i][18:9]) && (tlb_ps4MB[i] || s1_vppn[8:0] == tlb_vppn[i][8:0]);
 
 end    
 endgenerate
