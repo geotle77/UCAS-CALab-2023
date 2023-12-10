@@ -74,4 +74,4 @@ The exp10 is to implement **MUL** module and make it work.
 ## exp18 实验流水账
 
 ## exp19 实验流水账
-- 2023/12/10 18:00 开始exp18实验代码
+- 2023/12/10 18:00 开始exp19实验代码，分离pre-IF和IF模块
