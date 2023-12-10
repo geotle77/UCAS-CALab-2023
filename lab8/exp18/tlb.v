@@ -10,7 +10,7 @@ module tlb
     input  wire                      s0_va_bit12,
     input  wire [               9:0] s0_asid,
     output wire                      s0_found,
-    output wire [$clog2(TLBNUM)-1:0] s0_index,
+    output wire [$clog2(TLBNUM)-1:0] s0_index,//clog2 is a system function, return the ceil(log2(TLBNUM))
     output wire [              19:0] s0_ppn,
     output wire [               5:0] s0_ps,
     output wire [               1:0] s0_plv,
@@ -158,7 +158,7 @@ wire s1_odd;
 
 // fetch inst
 assign s0_found = |match0;
-
+//too many ? : operator, another solution
 assign s0_index =   match0[ 1] ? 4'd1  :
                     match0[ 2] ? 4'd2  :
                     match0[ 3] ? 4'd3  :
@@ -175,6 +175,20 @@ assign s0_index =   match0[ 1] ? 4'd1  :
                     match0[14] ? 4'd14 :
                     match0[15] ? 4'd15 :
                     4'd0; // Default, 没有找到时需要把found置为0
+//TODO:another solution:
+/*
+integer i;
+reg [3:0] s0_index_temp0;
+always @(*) begin
+    for(i = 0; i < TLBNUM; i = i + 1) begin
+        if(match0[i]) begin
+            s0_index_temp0 = i;
+            break;
+        end
+    end
+end
+assign s0_index = s0_index_temp0;
+*/
 
 assign s0_odd = tlb_ps4MB[s0_index] ? s0_vppn[8] : s0_va_bit12; //whether the odd page hit
 assign s0_ps = tlb_ps4MB[s0_index] ? 6'd21 : 6'd12;
@@ -203,6 +217,19 @@ assign s1_index =   match1[ 1] ? 4'd1  :
                     match1[14] ? 4'd14 :
                     match1[15] ? 4'd15 :
                     4'd0; // Default, 没有找到时需要把found置为0
+/*
+integer j;
+reg [3:0] s0_index_temp1;
+always @(*) begin
+    for(j = 0; j < TLBNUM; j = j + 1) begin
+        if(match0[j]) begin
+            s0_index_temp1 = j;
+            break;
+        end
+    end
+end
+assign s1_index = s0_index_temp1;
+*/
 
 assign s1_odd = tlb_ps4MB[s1_index] ? s1_vppn[8] : s1_va_bit12;
 assign s1_ps = tlb_ps4MB[s1_index] ? 6'd21: 6'd12;

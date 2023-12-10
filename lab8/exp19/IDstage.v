@@ -121,12 +121,6 @@ assign ds2es_bus = {ds_refetch_flg, //272
                     time_op         //1:0
                     };
 
-
-
-
-
-
-
 reg ds_valid;
 
 wire src1_is_pc;
@@ -594,7 +588,7 @@ assign ds_exc_data = {ds_csr_op,
 
 wire [3:0]  ds_csr_op;
 assign ds_csr_op = {inst_rdcntid, inst_csrxchg, inst_csrwr, inst_csrrd};
-
+//TODO:why we need refetch in these cases?
 assign ds_refetch_flg = inst_tlbfill || inst_tlbwr || inst_tlbrd || inst_invtlb ||
                         (ds_csr_op[2] || ds_csr_op[1]) && (ds_csr_num == `CSR_CRMD || ds_csr_num == `CSR_ASID);
 assign invtlb_op = rd;

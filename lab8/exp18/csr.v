@@ -86,12 +86,12 @@ module csr(
     reg  [ 6: 5] csr_crmd_datf;
     reg  [ 8: 7] csr_crmd_datm;
 
-    // PRMD 例外前模式信�?
+    // PRMD 例外前模式信�?
     wire [31: 0] csr_prmd_rvalue;
     reg  [ 1: 0] csr_prmd_pplv;     //Old value of CRMD's PLV field
     reg          csr_prmd_pie;      //Old value of CRMD's PIE field
 
-    // ESTAT 例外状�??
+    // ESTAT 例外状�??
     wire [31: 0] csr_estat_rvalue;    
     reg  [12: 0] csr_estat_is;      // Status bits for exception interrupts, 8 hardware interrupts + 1 timer interrupt + 1 inter-core interrupt + 2 software interrupts)
     reg  [ 5: 0] csr_estat_ecode;   // Exception type level-1 code
@@ -127,23 +127,23 @@ module csr(
     reg [12:0] csr_ecfg_lie;
     wire [31:0] csr_ecfg_rvalue;
     
-    // BADV 出错虚地�?
+    // BADV 出错虚地�?
     wire [31:0] csr_badv_rvalue;
     wire wb_ex_addr_err;
     reg [31:0] csr_badv_vaddr;
 
-    // TID 定时器编�?
+    // TID 定时器编�?
     wire [31:0] csr_tid_rvalue;
     reg [31:0] csr_tid_tid ;
 
 
-    // TCFG 定时器配�?
+    // TCFG 定时器配�?
     reg csr_tcfg_en ; 
     reg csr_tcfg_periodic ;
     reg [29:0] csr_tcfg_initval ;
     wire [31:0] csr_tcfg_rvalue ;
 
-    // TVAL 定时器数�?
+    // TVAL 定时器数�?
     wire [31:0] tcfg_next_value ;
     reg  [31:0] timer_cnt ;
     wire [31:0] csr_tval_timeval;
@@ -153,7 +153,7 @@ module csr(
     wire csr_ticlr_clr ;
     wire [31:0] csr_ticlr_rvalue ;
 
-
+    //exp18
     // TLBIDX
     wire [31:0] csr_tlbidx_rvalue;
     reg  [ 5:0] csr_tlbidx_ps;
@@ -187,9 +187,6 @@ module csr(
     // TLBRENTRY
     wire [31:0] csr_tlbrentry_rvalue;
     reg  [25:0] csr_tlbrentry_pa;
-
-
-
 
     // CRMD's PLV、IE field
     always @(posedge clk) begin
@@ -329,6 +326,7 @@ module csr(
         end
     end
 
+
     // BADV
     assign wb_ex_addr_err = wb_ecode==`ECODE_ADE || wb_ecode==`ECODE_ALE;
     always @(posedge clk) begin
@@ -390,8 +388,7 @@ module csr(
     // TICLR
     assign csr_ticlr_clr = 1'b0;
 
-
-
+// exp18
     // TLBIDX
     always @ (posedge clk) begin
         if (reset) begin
@@ -513,12 +510,6 @@ module csr(
                                ~csr_wmask[`CSR_TLBRENTRY_PA] & csr_tlbrentry_pa;
         end
     end
-
-
-
-
-
-
 
     // Readout data for CSR read instructions: re-spliced with fields to complete register contents, read back data selected by register number
     // exp 12
