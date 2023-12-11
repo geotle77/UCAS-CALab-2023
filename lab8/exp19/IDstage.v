@@ -54,6 +54,7 @@ assign {mem_rf_we, mem_dest, final_result} = mem_forward_zip;//waiting to add th
 
 // exception data from fs
 wire [`FS_EXC_DATA_WD-1:0]  fs_exc_data;
+wire [5 :0]                 ds_exc_ecode;
 wire [31:0]                 ds_inst;
 wire [31:0]                 ds_pc;
 wire [31:0]                 ds_wrong_addr;
@@ -73,7 +74,7 @@ always @(posedge clk) begin
       fs2ds_bus_reg <= fs2ds_bus;
     end
   end
-assign {fs_exc_data,ds_pc,ds_inst} = fs2ds_bus_reg;
+assign {ds_exc_ecode,fs_exc_data,ds_pc,ds_inst} = fs2ds_bus_reg;
 
 
 // br
@@ -564,13 +565,15 @@ assign csr_wvalue   = rkd_value;
 assign ds_csr_num   = {14{inst_rdcntid}} & `CSR_TID | {14{~inst_rdcntid}} & ds_inst[23:10];
 
 assign ds_ertn_flush = ds_valid & inst_ertn;
-assign ds_ex = ds_valid & (inst_syscall | inst_break | ds_ine | ds_has_int | ds_adef);
+assign ds_ex = ds_valid & (inst_syscall | inst_break | ds_ine | ds_has_int | ds_adef |(|ds_exc_ecode));
 
 assign ds_ecode = ds_has_int   ? `ECODE_INT
                 : ds_adef      ? `ECODE_ADE
                 : ds_ine       ? `ECODE_INE
                 : inst_break   ? `ECODE_BRK
-                : inst_syscall ? `ECODE_SYS : 6'b0;
+                : ds_tlb_exc_data[0] ? `ECODE_TLBR   // priority: TLBR > else
+                : ds_tlb_exc_data[3] ? `ECODE_PIF
+                : ds_tlb_exc_data[1] ? `ECODE_PPI: 6'b0;
 assign ds_esubcode = ds_adef ? `ESUBCODE_ADEF : 9'b0;
 assign ds_exc_data = {ds_csr_op,
                      ds_adef,      //97:97
@@ -590,7 +593,7 @@ wire [3:0]  ds_csr_op;
 assign ds_csr_op = {inst_rdcntid, inst_csrxchg, inst_csrwr, inst_csrrd};
 //TODO:why we need refetch in these cases?
 assign ds_refetch_flg = inst_tlbfill || inst_tlbwr || inst_tlbrd || inst_invtlb ||
-                        (ds_csr_op[2] || ds_csr_op[1]) && (ds_csr_num == `CSR_CRMD || ds_csr_num == `CSR_ASID);
+                        (ds_csr_we) && (ds_csr_num == `CSR_CRMD || ds_csr_num == `CSR_ASID);
 assign invtlb_op = rd;
 
 endmodule

@@ -20,6 +20,7 @@ module preIFstage(
     input wire [`BR_BUS-1:0]            fs_br_zip,
     input wire                          fs_reflush;
     output wire                         to_fs_valid,
+    output wire                         pfs_ready_go,
 
     // interface with CSR
     input wire [31: 0]                  csr_ex_entry,
@@ -28,7 +29,7 @@ module preIFstage(
     input wire                          wb_ex,          // exception in WB
     input wire                          ertn_flush,     // ertn in WB
     input wire                          fs_reflush,     // syscall in WB
-    input wire [IF2PFS_CSR_BUS-1:0]                   fs2pfs_bus, 
+    input wire [IF2PFS_CSR_BUS-1:0]     fs2pfs_bus, 
 )
 reg pfs_valid;
 wire to_fs_valid;

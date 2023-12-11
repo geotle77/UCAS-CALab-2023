@@ -85,6 +85,7 @@ wire [18:0] csr_tlbehi_vppn;
 wire [ 3:0] csr_tlbidx_index;
 
 wire        ms_csr_tlbrd;
+wire        ws_csr_tlbrd;
 
 wire tlbrd_we;
 wire tlbsrch_we;
@@ -150,7 +151,11 @@ wire [ 1:0] r_mat1;
 wire        r_d1;
 wire        r_v1;
 
-
+//exp 19
+wire [31:0] csr_crmd_rvalue,
+wire [31:0] csr_asid_rvalue,
+wire [31:0] csr_dmw0_rvalue,
+wire [31:0] csr_dmw1_rvalue 
 
 
 
@@ -180,7 +185,22 @@ IFstage my_if (
     .ertn_flush       (ertn_flush),
     .wb_ex            (wb_ex     ),
 
-    .fs_reflush       (ws_reflush)
+    .fs_reflush       (ws_reflush),
+
+    .csr_crmd_rvalue (csr_crmd_rvalue),
+    .csr_asid_rvalue (csr_asid_rvalue),
+    .csr_dmw0_rvalue (csr_dmw0_rvalue),
+    .csr_dmw1_rvalue (csr_dmw1_rvalue),
+    .s0_found         (s0_found),
+    .s0_index         (s0_index),
+    .s0_ppn           (s0_ppn),
+    .s0_ps            (s0_ps),
+    .s0_plv           (s0_plv),
+    .s0_mat           (s0_mat), 
+    .s0_d             (s0_d),
+    .s0_v             (s0_v),
+    .s0_va_highbits   ({s0_vppn, s0_va_bit12}),
+    .s0_asid          (s0_asid) 
 );
 
 
@@ -253,9 +273,25 @@ EXEstage my_exe (
     .s1_asid          (s1_asid),
     .invtlb_valid     (invtlb_valid),
     .invtlb_op        (invtlb_op),
+    .s1_found        (s1_found),
+    .s1_index        (s1_index),
     .csr_asid_asid    (csr_asid_asid),
     .csr_tlbehi_vppn  (csr_tlbehi_vppn),
-    .ms_csr_tlbrd     (ms_csr_tlbrd)
+    .ms_csr_tlbrd     (ms_csr_tlbrd),
+    .ws_csr_tlbrd    (ws_csr_tlbrd),
+    // exp 19
+    .csr_crmd_rvalue  (csr_crmd_rvalue),
+    .csr_asid_rvalue  (csr_asid_rvalue),
+    .csr_dmw0_rvalue  (csr_dmw0_rvalue),
+    .csr_dmw1_rvalue  (csr_dmw1_rvalue),
+    .s1_found         (s1_found),
+    .s1_index         (s1_index),
+    .s1_ppn           (s1_ppn),
+    .s1_ps            (s1_ps),
+    .s1_plv           (s1_plv),
+    .s1_mat           (s1_mat), 
+    .s1_d             (s1_d),
+    .s1_v             (s1_v)
 );
 
 
@@ -284,8 +320,8 @@ MEMstage my_mem (
 
 
     // exp 18
-    .s1_found        (s1_found),
-    .s1_index        (s1_index),
+    //.s1_found        (s1_found),
+    //.s1_index        (s1_index),
     .ms_csr_tlbrd    (ms_csr_tlbrd)
 );
 
@@ -307,7 +343,7 @@ WBstage my_wb (
     .debug_wb_rf_wdata(debug_wb_rf_wdata),
 
     .csr_rvalue       (csr_rvalue),
-    .ws_ertn_flush       (ertn_flush),
+    .ws_ertn_flush    (ertn_flush),
     .ws_reflush       (ws_reflush),
     .ws_ex            (wb_ex),
     .ws2csr_bus       (ws2csr_bus),
@@ -381,7 +417,11 @@ csr u_csr(
     .w_tlb_plv1      (w_plv1),
     .w_tlb_mat1      (w_mat1),
     .w_tlb_d1        (w_d1),
-    .w_tlb_v1        (w_v1)
+    .w_tlb_v1        (w_v1),
+    .csr_crmd_rvalue (csr_crmd_rvalue),
+    .csr_asid_rvalue (csr_asid_rvalue),
+    .csr_dmw0_rvalue (csr_dmw0_rvalue),
+    .csr_dmw1_rvalue (csr_dmw1_rvalue)
 );
 
 

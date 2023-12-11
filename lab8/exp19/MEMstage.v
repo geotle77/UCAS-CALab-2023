@@ -23,15 +23,12 @@ module MEMstage (
     output wire [`FORWARD_BUS_LEN-1:0]  mem_forward_zip,
     
 
-    output wire ms_mem_block, // load/store or CSRwrite/read in MEM
+    output wire                         ms_mem_block, // load/store or CSRwrite/read in MEM
 
-    output wire ms_ex_to_es,  // to EXE
-    input  wire ms_reflush,   // syscall in WB
-    output wire ms_csr_re,    // to ID
+    output wire                         ms_ex_to_es,  // to EXE
+    input  wire                         ms_reflush,   // syscall in WB
+    output wire                         ms_csr_re,    // to ID
 
-    //exp 18
-    input wire                          s1_found,   // from tlb
-    input wire                   [ 3:0] s1_index,   // from tlb
     output wire                         ms_csr_tlbrd  // to EXE
 );
 
@@ -45,6 +42,12 @@ wire          ms_inst_tlbsrch;
 wire          ms_inst_tlbrd;
 wire          ms_inst_tlbwr;
 wire          ms_inst_tlbfill;
+// TLB search result
+wire          ms_tlbsrch_hit;
+wire [ 3:0]   ms_tlbsrch_hit_index;
+wire [ 5:0]   ms_exc_ecode; 
+wire          ms_adem;
+
 wire          mem_we;
 wire          ms_res_from_mem;
 wire [31:0]   ms_pc;
@@ -57,11 +60,15 @@ wire          mem_gr_we;
 wire [31:0]   mem_rkd_value;
 wire [`MS_EXC_DATA_WD-1 : 0] mem_exc_data;
 reg[`ES2MS_BUS_LEN-1:0] es2ms_bus_reg;
-assign {ms_refetch_flg,
+assign {ms_adem,
+        ms_exc_ecode,
+        ms_refetch_flg,
         ms_inst_tlbsrch,
         ms_inst_tlbrd,
         ms_inst_tlbwr,
         ms_inst_tlbfill,
+        ms_tlbsrch_hit,
+        ms_tlbsrch_hit_index,
         mem_we,
         ms_res_from_mem,
         ms_pc,
@@ -82,7 +89,9 @@ assign mem_forward_zip = {mem_rf_we,
                           mem_final_result
                           };
 
-assign ms2ws_bus = {ms_refetch_flg,
+assign ms2ws_bus = {
+                    ms_exc_ecode,
+                    ms_refetch_flg,
                     ms_inst_tlbsrch,
                     ms_inst_tlbrd,
                     ms_inst_tlbwr,
@@ -113,7 +122,7 @@ assign ms_need_mem = ms_valid && (ms_res_from_mem || mem_we);
 
 
 wire ms_ready_go;
-assign ms_ready_go = ms_need_mem && data_sram_data_ok ||  ~ms_need_mem;
+assign ms_ready_go = ms_need_mem && (data_sram_data_ok ||(|ms_exc_ecode) || ms_adem) ||  ~ms_need_mem;
 assign ms_allowin = ~ms_valid || ms_ready_go && ws_allowin;
 assign ms2ws_valid = ms_valid && ms_ready_go;
 
@@ -140,18 +149,13 @@ end
 
 
 
-// TLB search result
-wire        ms_tlbsrch_hit;
-wire [ 3:0] ms_tlbsrch_hit_index;
 
-assign ms_tlbsrch_hit = s1_found;
-assign ms_tlbsrch_hit_index = s1_index;
 
-assign ms_csr_tlbrd = ( ( mem_csr_num == `CSR_ASID || mem_csr_num == `CSR_TLBEHI) && (mem_csr_op[2]||mem_csr_op[1])
+//assign ms_tlbsrch_hit = s1_found;
+//assign ms_tlbsrch_hit_index = s1_index;
+
+assign ms_csr_tlbrd = ( ( mem_csr_num == `CSR_ASID || mem_csr_num == `CSR_TLBEHI) && (mem_csr_we)
                      || ms_inst_tlbrd) && ms_valid;
-
-
-
 
 // exception
 
@@ -215,10 +219,6 @@ assign mem_final_result  = {32{ms_res_from_mem}} & ld_data |
                         {32{~ms_res_from_mem &~mem_res_from_mul}}&mem_alu_result ;
 //
 assign ms_mem_block = ( ms_res_from_mem || (mem_csr_re|mem_csr_we)) && ms_valid;     
-
-
-
-
 
 
 endmodule

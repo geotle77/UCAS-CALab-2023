@@ -178,16 +178,16 @@ assign s0_index =   match0[ 1] ? 4'd1  :
 //TODO:another solution:
 /*
 integer i;
-reg [3:0] s0_index_temp0;
+reg [3:0] s0_index_temp;
 always @(*) begin
     for(i = 0; i < TLBNUM; i = i + 1) begin
         if(match0[i]) begin
-            s0_index_temp0 = i;
+            s0_index_temp = i;
             break;
         end
     end
 end
-assign s0_index = s0_index_temp0;
+assign s0_index = s0_index_temp;
 */
 
 assign s0_odd = tlb_ps4MB[s0_index] ? s0_vppn[8] : s0_va_bit12; //whether the odd page hit
@@ -219,16 +219,16 @@ assign s1_index =   match1[ 1] ? 4'd1  :
                     4'd0; // Default, 没有找到时需要把found置为0
 /*
 integer j;
-reg [3:0] s0_index_temp1;
+reg [3:0] s1_index_temp;
 always @(*) begin
     for(j = 0; j < TLBNUM; j = j + 1) begin
         if(match0[j]) begin
-            s0_index_temp1 = j;
+            s1_index_temp = j;
             break;
         end
     end
 end
-assign s1_index = s0_index_temp1;
+assign s1_index = s1_index_temp;
 */
 
 assign s1_odd = tlb_ps4MB[s1_index] ? s1_vppn[8] : s1_va_bit12;

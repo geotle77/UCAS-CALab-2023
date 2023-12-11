@@ -1,55 +1,74 @@
 `include "BUS_LEN.vh"
 `include "CSR.vh"
 module EXEstage (
-    input wire clk,
-    input wire resetn,
-    input wire reset,
+    input   wire                        clk,
+    input   wire                        resetn,
+    input   wire                        reset,
 
     //interface with SRAM
-    output wire                         data_sram_en,
-    output wire                         data_sram_wr,
-    output wire [ 3:0]                  data_sram_we,
-    output wire [ 1:0]                  data_sram_size,
-    output wire [31:0]                  data_sram_addr,
-    output wire [31:0]                  data_sram_wdata,
-    input wire                          data_sram_addr_ok,
+    output  wire                         data_sram_en,
+    output  wire                         data_sram_wr,
+    output  wire [ 3:0]                  data_sram_we,
+    output  wire [ 1:0]                  data_sram_size,
+    output  wire [31:0]                  data_sram_addr,
+    output  wire [31:0]                  data_sram_wdata,
+    input   wire                          data_sram_addr_ok,
     
     // interface between IDstage and EXEstage
-    output wire                         es_allowin,
-    input  wire                         ds2es_valid,
-    input  wire [`DS2ES_BUS_LEN-1:0]    ds2es_bus,
+    output  wire                         es_allowin,
+    input   wire                         ds2es_valid,
+    input   wire [`DS2ES_BUS_LEN-1:0]    ds2es_bus,
 
     // interface between EXEstage and MEMstage
-    input  wire                         ms_allowin,
-    output wire                         es2ms_valid,
-    output wire [`ES2MS_BUS_LEN-1:0]    es2ms_bus,
-    output wire [67:0]                  mul_result,
+    input   wire                         ms_allowin,
+    output  wire                         es2ms_valid,
+    output  wire [`ES2MS_BUS_LEN-1:0]    es2ms_bus,
+    output  wire [67:0]                  mul_result,
 
 
     // forward data
-    output wire [`FORWARD_BUS_LEN-1:0]  exe_forward_zip,
+    output  wire [`FORWARD_BUS_LEN-1:0]  exe_forward_zip,
     
 
-    input  wire mul_block,     // mul or load in ID
-    output reg  es_block,      // mul or load in EXE
-    output wire es_mem_block,  // load/store or CSRwrite/read in EXE
+    input   wire                         mul_block,     // mul or load in ID
+    output  reg                          es_block,      // mul or load in EXE
+    output  wire                         es_mem_block,  // load/store or CSRwrite/read in EXE
 
-    input  wire ms_ex_to_es,   // from MEM
-    input  wire es_reflush,    // syscall in WB
-    output wire es_csr_re,     // to ID
+    input   wire                         ms_ex_to_es,   // from MEM
+    input   wire                         es_reflush,    // syscall in WB
+    output  wire                         es_csr_re,     // to ID
 
 
     // exp 18
     // to tlb
-    output wire [19:0] s1_va_highbits,
-    output wire [ 9:0] s1_asid,
-    output wire        invtlb_valid,
-    output wire [ 4:0] invtlb_op,
+    output  wire [19:0]                  s1_va_highbits,
+    output  wire [ 9:0]                  s1_asid,
+    output  wire                         invtlb_valid,
+    output  wire [ 4:0]                  invtlb_op,
+        //exp 18
+    input   wire                          s1_found,   // from tlb
+    input   wire [ 3:0]                   s1_index,   // from tlb
     // from csr, used for tlbsrch
-    input  wire [ 9:0] csr_asid_asid,
-    input  wire [18:0] csr_tlbehi_vppn,
+    input   wire [ 9:0]                  csr_asid_asid,
+    input   wire [18:0]                  csr_tlbehi_vppn,
     // blk tlbsrch
-    input  wire        ms_csr_tlbrd
+    input   wire                         ms_csr_tlbrd,
+    input   wire                         ws_csr_tlbrd,
+    // from csr
+    input wire  [31:0] csr_crmd_rvalue,
+    input wire  [31:0] csr_asid_rvalue,
+    input wire  [31:0] csr_dmw0_rvalue,
+    input wire  [31:0] csr_dmw1_rvalue,
+
+    // from tlb
+    input  wire        s1_found,
+    input  wire [ 3:0] s1_index,
+    input  wire [19:0] s1_ppn,
+    input  wire [ 5:0] s1_ps,
+    input  wire [ 1:0] s1_plv,
+    input  wire [ 1:0] s1_mat,
+    input  wire        s1_d,
+    input  wire        s1_v
 );
 
 //--------------------declaration--------------------
@@ -63,11 +82,6 @@ always @(posedge clk) begin
   end
 end
 
-
-
-
-
-
 wire                          es_refetch_flg;
 wire [4:0]                    es_invtlb_op;
 wire                          es_inst_tlbsrch;
@@ -75,6 +89,9 @@ wire                          es_inst_tlbrd;
 wire                          es_inst_tlbwr;
 wire                          es_inst_tlbfill;
 wire                          es_inst_invtlb;
+// TLB
+wire        es_tlbsrch_hit;
+wire [ 3:0] es_tlbsrch_hit_index;
 
 wire [31:0]                   es_pc;
 wire                          es_res_from_mul;
@@ -119,11 +136,15 @@ assign {es_refetch_flg,
 wire                        es_mem_we;
 wire                        es_res_from_mem;
 wire [`ES_EXC_DATA_WD-1:0]  es_exc_data;
-assign es2ms_bus = {es_refetch_flg,
+assign es2ms_bus = {es_adem,
+                    es_exc_ecode,
+                    es_refetch_flg,
                     es_inst_tlbsrch,
                     es_inst_tlbrd,
                     es_inst_tlbwr,
                     es_inst_tlbfill,
+                    es_tlbsrch_hit,
+                    es_tlbsrch_hit_index,
                     es_mem_we,
                     es_res_from_mem,
                     es_pc,
@@ -176,7 +197,9 @@ wire        ld_ale         ;
 wire        st_ale         ;
 wire        es_ale         ;
 wire [ 5:0] ds_ecode       ;
+wire [ 8:0] ds_esubcode    ;
 wire [ 5:0] es_ecode       ;
+wire es_adem;
 
 
 
@@ -201,11 +224,19 @@ assign es_final_result  = {32{es_time_op[0]}}                 & counter[31: 0]
                         | {32{es_time_op[1]}}                 & counter[63:32]
                         | {32{~es_time_op[0]&~es_time_op[1]}} & es_alu_result;
 
-
-
+assign es_adem = es_need_mem & es_alu_result[31] & (csr_crmd_plv == 2'd3) & ~(dmw_hit0 | dmw_hit1);
 assign es_wrong_addr  = es_adef ? ds_wrong_addr : es_alu_result;
-assign es_ecode       = es_ale  ? `ECODE_ALE    : ds_ecode;
-assign es_ex          = (ds_ex | es_ale) & es_valid;
+assign es_ecode       =   ds_ex    ? ds_ecode
+                        : es_adem  ? `ECODE_ADE
+                        : es_ale   ? `ECODE_ALE
+                        : es_tlb_exc_data[0] ? `ECODE_TLBR
+                        : es_tlb_exc_data[5] ? `ECODE_PIL
+                        : es_tlb_exc_data[4] ? `ECODE_PIS
+                        : es_tlb_exc_data[1] ? `ECODE_PPI
+                        : es_tlb_exc_data[2] ? `ECODE_PME
+                        : 6'h0;
+assign es_esubcode    =  es_adem ? `ESUBCODE_ADEM : ds_esubcode;
+assign es_ex          = (ds_ex | es_ale |es_adem | (|es_exc_ecode)) & es_valid;
 
 assign {es_csr_op,
         es_adef,         // 97
@@ -216,7 +247,7 @@ assign {es_csr_op,
         es_csr_num,      // 30:17
         es_ertn_flush,   // 16
         ds_ex,           // 15
-        es_esubcode,     // 14:6
+        ds_esubcode,     // 14:6
         ds_ecode         // 5:0
         } = ds_exc_data;
 
@@ -240,7 +271,7 @@ assign es_exc_data = {es_csr_op,
 //--------------------pipeline control--------------------
 
 wire tlbsrch_blk;
-assign tlbsrch_blk = es_inst_tlbsrch & ms_csr_tlbrd;
+assign tlbsrch_blk = es_inst_tlbsrch & (ms_csr_tlbrd|ws_csr_tlbrd);
 
 wire es_ready_go;
 assign es_ready_go = es_need_mem ? (es_reflush || es_finish || data_sram_en && data_sram_addr_ok && !tlbsrch_blk)
@@ -331,7 +362,7 @@ assign data_sram_size  = (es_store_op[0] | es_load_op[0] | es_load_op[3]) ? 2'b0
                        : 2'b10;
 assign data_sram_wr    =  |es_store_op;
 assign data_sram_we    =  es_mem_we ? st_strb : 4'b0000;
-assign data_sram_addr  =  es_alu_result;
+//assign data_sram_addr  =  es_alu_result;
 assign data_sram_wdata =  st_data;
 
 
@@ -353,10 +384,63 @@ booth_multiplier u_mul(
 
 
 
-// TLB
+assign es_tlbsrch_hit = s1_found & es_inst_tlbsrch;
+assign es_tlbsrch_hit_index = s1_index & {4{es_inst_tlbsrch}};
+
+
 assign s1_va_highbits = invtlb_valid ? es_rkd_value[31:12] : {csr_tlbehi_vppn, 1'b0};
 assign s1_asid        = invtlb_valid ? es_rj_value [ 9: 0] : csr_asid_asid;
 assign invtlb_valid   = es_inst_invtlb;
 assign invtlb_op      = es_invtlb_op;
+
+//exp 19
+wire csr_crmd_da;
+wire csr_crmd_pg;
+wire [1:0] csr_crmd_plv;
+
+assign csr_crmd_da = csr_crmd_rvalue[`CSR_CRMD_DA];
+assign csr_crmd_pg = csr_crmd_rvalue[`CSR_CRMD_PG];
+assign csr_crmd_plv = csr_crmd_rvalue[`CSR_CRMD_PLV];
+
+wire        direct; //direct addr translation
+wire        dmw_hit0  ;
+wire        dmw_hit1  ;
+wire [31:0] dmw_paddr0;
+wire [31:0] dmw_paddr1;
+wire [31:0] tlb_paddr ;
+wire        tlb_trans;
+wire        ecode_pil ; //load Action Page Invalid Exception
+wire        ecode_pis ; //Store Operation Page Invalid Exception
+wire        ecode_pif ;//Invalid Finger Fetching Page Exception
+wire        ecode_pme ;//Page modification exceptions
+wire        ecode_ppi ;//Page Privilege Level Noncompliance Exception
+wire        ecode_tlbr;//TLB Refill Exception
+
+assign direct = csr_crmd_da & ~ csr_crmd_pg;
+
+assign dmw_hit0 = csr_dmw0_rvalue[csr_crmd_plv] && (csr_dmw0_rvalue[31:29] == es_alu_result[31:29]);
+assign dmw_hit1 = csr_dmw1_rvalue[csr_crmd_plv] && (csr_dmw1_rvalue[31:29] == es_alu_result[31:29]);
+assign dmw_paddr0 = {csr_dmw0_rvalue[27:25], es_alu_result[28:0]};
+assign dmw_paddr1 = {csr_dmw1_rvalue[27:25], es_alu_result[28:0]}; 
+
+assign tlb_trans = ~dmw_hit0 & ~dmw_hit1 & ~direct;
+
+wire [5:0] es_exc_ecode;
+assign ecode_pif = 1'b0 ;
+assign ecode_ppi = tlb_trans & (csr_crmd_plv > s1_plv);
+assign ecode_tlbr = tlb_trans & ~s1_found;
+assign ecode_pil = tlb_trans & ~s1_v & es_res_from_mem;
+assign ecode_pis = tlb_trans & ~s1_v & es_mem_we;
+assign ecode_pme = tlb_trans & ~s1_d & es_mem_we;
+assign es_exc_ecode = direct ? 6'b0 :  {ecode_pil, ecode_pis, ecode_pif, ecode_pme, ecode_ppi, ecode_tlbr} & {6{es_need_mem}}; //only check tlb error when it is ld or store
+
+assign tlb_paddr = (s1_ps == 6'd12) ? {s1_ppn[19:0], es_alu_result[11:0]} : {s1_ppn[19:10], es_alu_result[21:0]};
+
+assign data_sram_addr = direct ? es_alu_result
+                      : dmw_hit0 ? dmw_paddr0
+                      : dmw_hit1 ? dmw_paddr1
+                      : tlb_paddr;
+
+
 
 endmodule

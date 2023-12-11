@@ -59,10 +59,17 @@ module csr(
     output wire [ 1:0]      w_tlb_plv1,
     output wire [ 1:0]      w_tlb_mat1,
     output wire             w_tlb_d1,
-    output wire             w_tlb_v1
+    output wire             w_tlb_v1,
+
+    // exp19
+    output wire [31:0] csr_crmd_rvalue,
+    output wire [31:0] csr_asid_rvalue,
+    output wire [31:0] csr_dmw0_rvalue,
+    output wire [31:0] csr_dmw1_rvalue  
 );
 
     //ws2csr_bus
+    wire        tlb_entry_en;
     wire        csr_re;
     wire        csr_we;
     wire [13:0] csr_num;
@@ -75,7 +82,7 @@ module csr(
     wire [31:0] coreid_in;
     wire [ 7:0] hw_int_in;
     wire [31:0] wb_vaddr;
-    assign {csr_re, csr_we, csr_num, csr_wmask, csr_wvalue, wb_pc, wb_ecode, wb_esubcode, ipi_int_in, coreid_in, hw_int_in, wb_vaddr} = ws2csr_bus;
+    assign {tlb_entry_en, csr_re, csr_we, csr_num, csr_wmask, csr_wvalue, wb_pc, wb_ecode, wb_esubcode, ipi_int_in, coreid_in, hw_int_in, wb_vaddr} = ws2csr_bus;
 
     // CRMD 当前模式信息
     wire [31: 0] csr_crmd_rvalue;
@@ -101,8 +108,8 @@ module csr(
     wire [31: 0] csr_era_rvalue;
     reg  [31: 0] csr_era_data;  
 
-    assign ex_entry = csr_eentry_rvalue;
-    
+    assign ex_entry = tlb_entry_en?tlb_ex_enty:csr_eentry_rvalue;
+    assign tlb_ex_enty = csr_eentry_rvalue;
 
     // EENTRY 例外入口地址
     wire [31: 0] csr_eentry_rvalue;   
