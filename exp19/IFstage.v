@@ -30,21 +30,12 @@ module IFstage (
     input wire [31: 0]                csr_ex_entry,
     input wire [31: 0]                csr_ertn_entry,
     //exp19
-     // from csr
-    input wire  [31:0]                csr_crmd_rvalue,
-    input wire  [31:0]                csr_asid_rvalue,
-    input wire  [31:0]                csr_dmw0_rvalue,
-    input wire  [31:0]                csr_dmw1_rvalue,
-
-    // from tlb
-    input  wire                       s0_found,
-    input  wire [ 3:0]                s0_index,
-    input  wire [19:0]                s0_ppn,
-    input  wire [ 5:0]                s0_ps,
-    input  wire [ 1:0]                s0_plv,
-    input  wire [ 1:0]                s0_mat,
-    input  wire                       s0_d,
-    input  wire                       s0_v, 
+    output wire [31:0]                va,
+    input  wire [31:0]                pa,
+    input wire  [ 5:0]                fs_exc_ecode,
+    input wire                        dmw_hit,
+    input wire  [1:0]                 plv,
+    input wire  [9:0]                 mmu_asid,
     // to tlb
     output wire [19:0]                s0_va_highbits,
     output wire [ 9:0]                s0_asid
@@ -150,7 +141,7 @@ wire [`FS_EXC_DATA_WD-1:0] fs_exc_data;
 /*this is because the fs[31] can be used to distinguish between user space and kernel space, 
 and only high privileges can access kernel space  
 */
-assign fs_adef = fs_pc[1] | fs_pc[0] |(csr_crmd_plv == 2'd3 & fs_pc[31] & ~(dmw_hit0 | dmw_hit1)); 
+assign fs_adef = fs_pc[1] | fs_pc[0] |(plv == 2'd3 & fs_pc[31] & ~(dmw_hit)); 
 assign fs_wrong_addr = fs_pc;
 assign fs_exc_data    = {fs_valid & fs_adef, // 32:32
                          fs_wrong_addr       // 31:0
@@ -222,11 +213,6 @@ always @(posedge clk) begin
 end
 
 
-
-
-
-
-
 //----------add----------
 reg pfs_reflush;
 
@@ -256,28 +242,11 @@ end
 wire    fs_inst_cancel;
 assign  fs_inst_cancel = fs_reflush | fs_reflush_reg | br_taken & ~br_stall | fs_br_taken;
 
-s0_va_highbits = nextpc[31:12];
-s0_asid = csr_asid_rvalue[`CSR_ASID_ASID];
+assign va=nextpc;
+assign inst_sram_addr = pa;
+
 //exp 19 
-MMU IF_mmu(
-  .csr_crmd_rvalue(csr_crmd_rvalue),
-  .csr_asid_rvalue(csr_asid_rvalue),
-  .csr_dmw0_rvalue(csr_dmw0_rvalue),
-  .csr_dmw1_rvalue(csr_dmw1_rvalue),
-
-  .s_found(s0_found),
-  .s_index(s0_index),
-  .s_ppn(s0_ppn),
-  .s_ps(s0_ps),
-  .s_plv(s0_plv),
-  .s_mat(s0_mat),
-  .s_d(s0_d),
-  .s_v(s0_v),
-
-  .va(nextpc),
-  .exc_ecode(fs_exc_ecode),
-  .pa(inst_sram_addr)
-)
-
+assign s0_va_highbits = nextpc[31:12];
+assign s0_asid = mmu_asid;
 endmodule
 

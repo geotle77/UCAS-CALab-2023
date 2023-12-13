@@ -151,15 +151,28 @@ wire [ 1:0] r_mat1;
 wire        r_d1;
 wire        r_v1;
 
+wire [19:0]                s0_va_highbits;
+wire [ 9:0]                s0_asid;
+
 //exp 19
 wire [31:0] csr_crmd_rvalue;
 wire [31:0] csr_asid_rvalue;
 wire [31:0] csr_dmw0_rvalue;
 wire [31:0] csr_dmw1_rvalue;
 
+wire[31:0] fs_va;
+wire[31:0] fs_pa;
+wire[9 :0] fs_asid;
+wire [5:0]fs_exc_ecode;
+wire [5:0]es_exc_ecode;
 
-
-
+wire[1:0] fs_plv;
+wire      fs_dmwhit;
+wire[31:0] es_va;
+wire[31:0] es_pa;
+wire[1:0] es_plv;
+wire      es_dmwhit;
+wire      es_mmu_en;
 
 IFstage my_if (
     .clk              (clk),
@@ -184,29 +197,44 @@ IFstage my_if (
     .csr_ertn_entry   (csr_ertn_entry),
     .ertn_flush       (ertn_flush),
     .wb_ex            (wb_ex     ),
+    .fs_reflush        (ws_reflush),
 
-    .fs_reflush       (ws_reflush),
+    .s0_va_bit12      (s0_va_bit12),
+    .s0_asid          (s0_asid),
 
-    .csr_crmd_rvalue (csr_crmd_rvalue),
-    .csr_asid_rvalue (csr_asid_rvalue),
-    .csr_dmw0_rvalue (csr_dmw0_rvalue),
-    .csr_dmw1_rvalue (csr_dmw1_rvalue),
-    .s0_found         (s0_found),
-    .s0_index         (s0_index),
-    .s0_ppn           (s0_ppn),
-    .s0_ps            (s0_ps),
-    .s0_plv           (s0_plv),
-    .s0_mat           (s0_mat), 
-    .s0_d             (s0_d),
-    .s0_v             (s0_v),
-    .s0_va_highbits   ({s0_vppn, s0_va_bit12}),
-    .s0_asid          (s0_asid) 
+    .va                (fs_va),
+    .pa                (fs_pa),
+    .plv               (fs_plv),
+    .dmw_hit           (fs_dmwhit),
+    .mmu_asid          (fs_asid),
+    .exc_code          (fs_exc_ecode)
 );
 
+MMU IF_mmu(
+  .flag(1'b10),
+  
+  .csr_crmd_rvalue(csr_crmd_rvalue),
+  .csr_asid_rvalue(csr_asid_rvalue),
+  .csr_dmw0_rvalue(csr_dmw0_rvalue),
+  .csr_dmw1_rvalue(csr_dmw1_rvalue),
 
+  .s_found(s0_found),
+  .s_index(s0_index),
+  .s_ppn(s0_ppn),
+  .s_ps(s0_ps),
+  .s_plv(s0_plv),
+  .s_mat(s0_mat),
+  .s_d(s0_d),
+  .s_v(s0_v),
+  
 
-
-
+  .dmw_hit(fs_dmwhit),
+  .plv(fs_plv),
+  .va(fs_va),
+  .exc_ecode(fs_exc_ecode),
+  .s_asid(fs_asid),
+  .pa(fs_pa)
+);
 
 IDstage my_id (
     .clk              (clk),
@@ -282,18 +310,36 @@ EXEstage my_exe (
     .ms_csr_tlbrd     (ms_csr_tlbrd),
     .ws_csr_tlbrd      (ws_csr_tlbrd),
     // exp 19
-    .csr_crmd_rvalue  (csr_crmd_rvalue),
-    .csr_asid_rvalue  (csr_asid_rvalue),
-    .csr_dmw0_rvalue  (csr_dmw0_rvalue),
-    .csr_dmw1_rvalue  (csr_dmw1_rvalue),
-    .s1_ppn           (s1_ppn),
-    .s1_ps            (s1_ps),
-    .s1_plv           (s1_plv),
-    .s1_mat           (s1_mat), 
-    .s1_d             (s1_d),
-    .s1_v             (s1_v)
+    .es_exc_ecode     (es_exc_ecode),
+    .dmwhit            (es_dmwhit),
+    .plv               (es_plv),
+    .va                (es_va),
+    .pa                (es_pa),
+    .mmu_en            (es_mmu_en)
 );
 
+MMU EXE_mmu(
+    .flag(es_mmu_en),
+    .csr_crmd_rvalue(csr_crmd_rvalue),
+    .csr_asid_rvalue(csr_asid_rvalue),
+    .csr_dmw0_rvalue(csr_dmw0_rvalue),
+    .csr_dmw1_rvalue(csr_dmw1_rvalue),
+    
+    .s_found(s1_found),
+    .s_index(s1_index),
+    .s_ppn(s1_ppn),
+    .s_ps(s1_ps),
+    .s_plv(s1_plv),
+    .s_mat(s1_mat),
+    .s_d(s1_d),
+    .s_v(s1_v),
+    
+    .va(es_alu_result),
+    .exc_ecode(es_exc_ecode),
+    .dmw_hit(es_dmwhit),
+    .plv(es_plv),
+    .pa(es_pa)
+);
 
 MEMstage my_mem (
     .clk              (clk),

@@ -1,6 +1,7 @@
 `include "CSR.vh"
 `include "BUS_LEN.vh"
 module MMU(
+    input wire  [1:0]                 flag,//10:inst;01:data
     input wire  [31:0]                csr_crmd_rvalue,
     input wire  [31:0]                csr_asid_rvalue,
     input wire  [31:0]                csr_dmw0_rvalue,
@@ -19,7 +20,10 @@ module MMU(
     //interface 
     input wire [31:0]                va,
     output wire [5:0]                exc_ecode,
-    output wire [31:0]               pa
+    output wire                      dmw_hit,
+    output wire [ 1:0]               plv,//10:adef,01:adem
+    output wire [31:0]               pa,
+    output wire [ 9:0]               s_asid
 );
 
 
@@ -88,5 +92,9 @@ assign pa =       ({32{direct}} & va) |
                   ({32{~direct & dmw_hit0}} & dmw_paddr0) | 
                   ({32{~direct & ~dmw_hit0 & dmw_hit1}} & dmw_paddr1) | 
                   ({32{~direct & ~dmw_hit0 & ~dmw_hit1}} & tlb_paddr);
+                  
+assign s_asid = csr_asid_asid;
+assign dmw_hit = dmw_hit0 | dmw_hit1;
+assign plv = csr_crmd_plv;
 
 endmodule

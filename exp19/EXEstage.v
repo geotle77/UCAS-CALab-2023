@@ -41,6 +41,7 @@ module EXEstage (
 
     // exp 18
     // to tlb
+                
     output  wire [19:0]                  s1_va_highbits,
     output  wire [ 9:0]                  s1_asid,
     output  wire                         invtlb_valid,
@@ -55,18 +56,13 @@ module EXEstage (
     input   wire                         ms_csr_tlbrd,
     input   wire                         ws_csr_tlbrd,
     // from csr
-    input wire  [31:0] csr_crmd_rvalue,
-    input wire  [31:0] csr_asid_rvalue,
-    input wire  [31:0] csr_dmw0_rvalue,
-    input wire  [31:0] csr_dmw1_rvalue,
+    input wire [5:0]                    es_exc_ecode,
+    output wire [31:0]                  va,
+    output wire                         mmu_en,
+    input wire [31:0]                   pa,
+    input   wire [1:0]                  plv,
+    input   wire                        dmw_hit,  
 
-    // from tlb
-    input  wire [19:0] s1_ppn,
-    input  wire [ 5:0] s1_ps,
-    input  wire [ 1:0] s1_plv,
-    input  wire [ 1:0] s1_mat,
-    input  wire        s1_d,
-    input  wire        s1_v
 );
 
 //--------------------declaration--------------------
@@ -223,7 +219,7 @@ assign es_final_result  = {32{es_time_op[0]}}                 & counter[31: 0]
                         | {32{es_time_op[1]}}                 & counter[63:32]
                         | {32{~es_time_op[0]&~es_time_op[1]}} & es_alu_result;
 
-assign es_adem = es_need_mem & es_alu_result[31] & (csr_crmd_plv == 2'd3) & ~(dmw_hit0 | dmw_hit1);
+assign es_adem = es_need_mem & es_alu_result[31] & (plv == 2'd3) & ~(dmw_hit);
 assign es_wrong_addr  = ds_ex ? ds_wrong_addr : es_alu_result;
 assign es_ecode       =   ds_ex    ? ds_ecode
                         : es_adem  ? `ECODE_ADE
@@ -393,26 +389,9 @@ assign invtlb_valid   = es_inst_invtlb;
 assign invtlb_op      = es_invtlb_op;
 
 //exp 19
-assign es_exc_ecode = es_exc & {6{es_need_mem}}; //only check tlb error when it is ld or store
-MMU EXEC_mmu(
-    .csr_crmd_rvalue(csr_crmd_rvalue),
-    .csr_asid_rvalue(csr_asid_rvalue),
-    .csr_dmw0_rvalue(csr_dmw0_rvalue),
-    .csr_dmw1_rvalue(csr_dmw1_rvalue),
-    
-    .s_found(s1_found),
-    .s_index(s1_index),
-    .s_ppn(s1_ppn),
-    .s_ps(s1_ps),
-    .s_plv(s1_plv),
-    .s_mat(s1_mat),
-    .s_d(s1_d),
-    .s_v(s1_v),
-    
-    .va(es_alu_result),
-    .exc_ecode(es_exc_ecode),
-    .pa(inst_sram_addr)
-)
-
+assign mmu_en ={{1'b0},{es_need_mem}}
+assign es_exc_ecode = es_exc_ecode & {6{es_need_mem}}; //only check tlb error when it is ld or store
+assign va = es_alu_result;
+assign data_sram_addr = pa;
 
 endmodule

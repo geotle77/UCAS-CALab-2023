@@ -104,7 +104,7 @@ wire tlbsrch_we;
 wire tlbsrch_hit;
 wire [ 3:0] tlbsrch_hit_index;
 //TODO:Packaging wb-level to csr-level interaction pathways about TLBs
-ws_csr_tlb_ctrl = {tlbrd_we, tlbwe_op, tlbsrch_we, tlbsrch_hit, tlbsrch_hit_index};
+assign ws_csr_tlb_ctrl = {tlbrd_we, tlbwe_op, tlbsrch_we, tlbsrch_hit, tlbsrch_hit_index};
 
 assign ws2csr_bus = {ws_csr_tlb_ctrl,
                      ws_exc_ecode[0],

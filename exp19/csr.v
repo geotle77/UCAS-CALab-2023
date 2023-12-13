@@ -20,7 +20,6 @@ module csr(
     output reg  [18:0]      csr_tlbehi_vppn,
     output reg  [ 3:0]      csr_tlbidx_index,
 
-    input  wire             tlbsrch_we,
 
     
     input  wire             r_tlb_e,
@@ -59,9 +58,9 @@ module csr(
     output wire             w_tlb_d1,
     output wire             w_tlb_v1,
 
-    output wire [ 3:0]      r_index;
-    output wire [ 3:0]      w_index;
-    output wire             we;
+    output wire [ 3:0]      r_index,
+    output wire [ 3:0]      w_index,
+    output wire             we,
 
     // exp19
     output wire [31:0] csr_crmd_rvalue,
@@ -107,7 +106,7 @@ module csr(
     wire tlbsrch_we;
     wire tlbsrch_hit;
     wire [ 3:0]tlbsrch_hit_index;
-    {tlbrd_we, tlbwe_op, tlbsrch_we, tlbsrch_hit, tlbsrch_hit_index}=csr_tlb_ctrl;
+    assign {tlbrd_we, tlbwe_op, tlbsrch_we, tlbsrch_hit, tlbsrch_hit_index}=csr_tlb_ctrl;
     assign we = |tlbwe_op;
     assign r_index = csr_tlbidx_index;
     assign w_index = {4{tlbwe_op[0]}}& csr_tlbidx_index | {4{tlbwe_op[1]}}& rand_idx;
@@ -121,7 +120,7 @@ module csr(
     reg  [ 6: 5] csr_crmd_datf;
     reg  [ 8: 7] csr_crmd_datm;
 
-    // PRMD 例外前模式信�??
+    // PRMD 例外前模式信�???
     wire [31: 0] csr_prmd_rvalue;
     reg  [ 1: 0] csr_prmd_pplv;     //Old value of CRMD's PLV field
     reg          csr_prmd_pie;      //Old value of CRMD's PIE field
@@ -162,23 +161,23 @@ module csr(
     reg [12:0] csr_ecfg_lie;
     wire [31:0] csr_ecfg_rvalue;
     
-    // BADV 出错虚地�??
+    // BADV 出错虚地�???
     wire [31:0] csr_badv_rvalue;
     wire wb_ex_addr_err;
     reg [31:0] csr_badv_vaddr;
 
-    // TID 定时器编�??
+    // TID 定时器编�???
     wire [31:0] csr_tid_rvalue;
     reg [31:0] csr_tid_tid ;
 
 
-    // TCFG 定时器配�??
+    // TCFG 定时器配�???
     reg csr_tcfg_en ; 
     reg csr_tcfg_periodic ;
     reg [29:0] csr_tcfg_initval ;
     wire [31:0] csr_tcfg_rvalue ;
 
-    // TVAL 定时器数�??
+    // TVAL 定时器数�???
     wire [31:0] tcfg_next_value ;
     reg  [31:0] timer_cnt ;
     wire [31:0] csr_tval_timeval;
