@@ -1,27 +1,27 @@
 module DIV(
-    input  wire    clk,
-    input  wire    resetn,
-    input  wire    div_en,
-    input  wire    sign,
-    input  wire [31:0] divisor,   
-    input  wire [31:0] dividend,  
-    output wire [63:0] result,
-    output wire    complete 
+    input  wire                 clk,
+    input  wire                 resetn,
+    input  wire                 div_en,
+    input  wire                 sign,
+    input  wire [31:0]          divisor,   
+    input  wire [31:0]          dividend,  
+    output wire [63:0]          result,
+    output wire                 complete 
 );
 
-    wire [31:0] quotient;
-    wire [31:0] remainder;
-    wire        sign_s;
-    wire        sign_r;
-    wire [31:0] divisor_abs;
-    wire [31:0] dividend_y;
-    wire [32:0] pre_r;
-    wire [32:0] recover_r;
-    reg  [63:0] divisor_pad;
-    reg  [32:0] dividend_pad;
-    reg  [31:0] quotient_reg;
-    reg  [32:0] remainder_reg;    
-    reg  [ 5:0] counter;
+    wire [31:0]                 quotient;
+    wire [31:0]                 remainder;
+    wire                        sign_s;
+    wire                        sign_r;
+    wire [31:0]                 divisor_abs;
+    wire [31:0]                 dividend_y;
+    wire [32:0]                 pre_r;
+    wire [32:0]                 recover_r;
+    reg  [63:0]                 divisor_pad;
+    reg  [32:0]                 dividend_pad;
+    reg  [31:0]                 quotient_reg;
+    reg  [32:0]                 remainder_reg;    
+    reg  [ 5:0]                 counter;
 
     assign sign_s = (divisor[31]^dividend[31]) & sign;
     assign sign_r = divisor[31] & sign;

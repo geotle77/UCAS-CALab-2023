@@ -45,7 +45,7 @@ module IFstage (
 wire [31:0] seq_pc;
 wire [31:0] nextpc;
 
-wire br_stall;//
+wire br_stall;
 wire br_taken;
 wire [31:0] br_target;
 
@@ -60,8 +60,21 @@ reg  pfs_valid;
 wire pfs_ready_go;
 wire to_fs_valid;
 
-wire [5:0] fs_exc_ecode;
 
+//exp13
+wire        fs_adef;
+wire [31:0] fs_wrong_addr;
+wire [`FS_EXC_DATA_WD-1:0] fs_exc_data;
+
+reg fs_ertn_valid;//delay ertn_flush
+reg fs_ex_valid;//delay wb_ex
+reg [31: 0]fs_ertn_entry;
+reg [31: 0]fs_ex_entry;
+reg fs_br_taken;
+reg [31: 0] fs_br_target;
+reg fs_br_stall;
+
+wire [5:0] fs_exc_ecode;
 assign {br_stall, br_taken, br_target} = br_zip;
 
 //------------------pre-IF stage------------------
@@ -133,10 +146,7 @@ assign fs2ds_bus = {fs_exc_ecode,   //102:97
 assign fs2ds_valid = fs_valid && fs_ready_go && ~fs_inst_cancel ;
 
 //////////excption information////////
-//exp13
-wire        fs_adef;
-wire [31:0] fs_wrong_addr;
-wire [`FS_EXC_DATA_WD-1:0] fs_exc_data;
+
 //TODO:why we should check the fs_pc[31]?
 /*this is because the fs[31] can be used to distinguish between user space and kernel space, 
 and only high privileges can access kernel space  
@@ -147,13 +157,7 @@ assign fs_exc_data    = {fs_valid & fs_adef, // 32:32
                          fs_wrong_addr       // 31:0
                         };
 
-reg fs_ertn_valid;//delay ertn_flush
-reg fs_ex_valid;//delay wb_ex
-reg [31: 0]fs_ertn_entry;
-reg [31: 0]fs_ex_entry;
-reg fs_br_taken;
-reg [31: 0] fs_br_target;
-reg fs_br_stall;
+
 
 assign seq_pc = fs_pc + 3'h4;
 assign nextpc  =  wb_ex? csr_ex_entry:   //the nextpc is updated in these cases
@@ -242,7 +246,7 @@ end
 wire    fs_inst_cancel;
 assign  fs_inst_cancel = fs_reflush | fs_reflush_reg | br_taken & ~br_stall | fs_br_taken;
 
-assign va=nextpc;
+assign va = nextpc;
 assign inst_sram_addr = pa;
 
 //exp 19 

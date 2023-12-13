@@ -14,7 +14,7 @@ module WBstage (
 
     // interface with CSR
     output wire [`WS2CSR_BUS_LEN-1 : 0] ws2csr_bus    ,
-    input  wire [31:0] csr_rvalue,
+    input  wire [31:0]                  csr_rvalue,
 
     // to previous stages
     output wire                         ws_ex         ,
@@ -25,7 +25,9 @@ module WBstage (
     output wire [31:0]                  debug_wb_pc       ,
     output wire [3:0]                   debug_wb_rf_we    ,
     output wire [4:0]                   debug_wb_rf_wnum  ,
-    output wire [31:0]                  debug_wb_rf_wdata
+    output wire [31:0]                  debug_wb_rf_wdata ,
+    
+    output wire                         ws_csr_tlbrd
 
 );
 

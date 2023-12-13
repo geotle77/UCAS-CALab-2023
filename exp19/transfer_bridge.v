@@ -1,85 +1,76 @@
 `include "BUS_LEN.vh"
 module transfer_bridge(
-    input wire         clk    ,
-    input wire         resetn ,
+    input wire                      clk    ,
+    input wire                      resetn ,
  
     // ar 
-    output wire    [ 3:0] arid   , // master -> slave
-    output wire    [31:0] araddr , // master -> slave
-    output wire    [ 7:0] arlen  , // master -> slave, 8'b0
-    output wire    [ 2:0] arsize , // master -> slave
-    output wire    [ 1:0] arburst, // master -> slave, 2'b1
-    output wire    [ 1:0] arlock , // master -> slave, 2'b0
-    output wire    [ 3:0] arcache, // master -> slave, 4'b0
-    output wire    [ 2:0] arprot , // master -> slave, 3'b0
-    output wire           arvalid, // master -> slave
-    input  wire           arready, // slave  -> master
+    output wire    [ 3:0]           arid   , // master -> slave
+    output wire    [31:0]           araddr , // master -> slave
+    output wire    [ 7:0]           arlen  , // master -> slave, 8'b0
+    output wire    [ 2:0]           arsize , // master -> slave
+    output wire    [ 1:0]           arburst, // master -> slave, 2'b1
+    output wire    [ 1:0]           arlock , // master -> slave, 2'b0
+    output wire    [ 3:0]           arcache, // master -> slave, 4'b0
+    output wire    [ 2:0]           arprot , // master -> slave, 3'b0
+    output wire                     arvalid, // master -> slave
+    input  wire                     arready, // slave  -> master
 
-    // r
-    input  wire    [ 3:0] rid   , // slave  -> master
-    input  wire    [31:0] rdata , // slave  -> master
-    input  wire    [ 1:0] rresp , // slave  -> master, ignore
-    input  wire           rlast , // slave  -> master, ignore
-    input  wire           rvalid, // slave  -> master
-    output wire           rready, // master -> slave
+    // r            
+    input  wire    [ 3:0]           rid   , // slave  -> master
+    input  wire    [31:0]           rdata , // slave  -> master
+    input  wire    [ 1:0]           rresp , // slave  -> master, ignore
+    input  wire                     rlast , // slave  -> master, ignore
+    input  wire                     rvalid, // slave  -> master
+    output wire                     rready, // master -> slave
 
-    // aw
-    output wire    [ 3:0] awid   , // master -> slave, 4'b1
-    output wire    [31:0] awaddr , // master -> slave
-    output wire    [ 7:0] awlen  , // master -> slave, 8'b0
-    output wire    [ 2:0] awsize , // master -> slave
-    output wire    [ 1:0] awburst, // master -> slave, 2'b1
-    output wire    [ 1:0] awlock , // master -> slave, 2'b0
-    output wire    [ 3:0] awcache, // master -> slave, 4'b0
-    output wire    [ 2:0] awprot , // master -> slave, 3'b0
-    output wire           awvalid, // master -> slave
-    input  wire           awready, // slave  -> master
+    // aw           
+    output wire    [ 3:0]           awid   , // master -> slave, 4'b1
+    output wire    [31:0]           awaddr , // master -> slave
+    output wire    [ 7:0]           awlen  , // master -> slave, 8'b0
+    output wire    [ 2:0]           awsize , // master -> slave
+    output wire    [ 1:0]           awburst, // master -> slave, 2'b1
+    output wire    [ 1:0]           awlock , // master -> slave, 2'b0
+    output wire    [ 3:0]           awcache, // master -> slave, 4'b0
+    output wire    [ 2:0]           awprot , // master -> slave, 3'b0
+    output wire                     awvalid, // master -> slave
+    input  wire                     awready, // slave  -> master
 
     // w
-    output wire    [ 3:0] wid   , // master -> slave, 4'b1
-    output wire    [31:0] wdata , // master -> slave
-    output wire    [ 3:0] wstrb , // master -> slave
-    output wire           wlast , // master -> slave, 1'b1
-    output wire           wvalid, // master -> slave
-    input  wire           wready, // slave  -> master
+    output wire    [ 3:0]           wid   , // master -> slave, 4'b1
+    output wire    [31:0]           wdata , // master -> slave
+    output wire    [ 3:0]           wstrb , // master -> slave
+    output wire                     wlast , // master -> slave, 1'b1
+    output wire                     wvalid, // master -> slave
+    input  wire                     wready, // slave  -> master
 
     // b
-    input  wire   [ 3:0] bid   , // slave  -> master, ignore
-    input  wire   [ 1:0] bresp , // slave  -> master, ignore
-    input  wire          bvalid, // slave  -> master
-    output wire          bready, // master -> slave
+    input  wire   [ 3:0]            bid   , // slave  -> master, ignore
+    input  wire   [ 1:0]            bresp , // slave  -> master, ignore
+    input  wire                     bvalid, // slave  -> master
+    output wire                     bready, // master -> slave
 
     // inst sram interface    
-    input  wire          inst_sram_en    ,
-    input  wire          inst_sram_wr     ,
-    input  wire   [ 1:0] inst_sram_size   ,
-    input  wire   [ 3:0] inst_sram_wstrb  ,
-    input  wire   [31:0] inst_sram_addr   ,
-    input  wire   [31:0] inst_sram_wdata  ,
-    output wire   [31:0] inst_sram_rdata  ,
-    output wire          inst_sram_addr_ok,
-    output wire          inst_sram_data_ok,
+    input  wire                     inst_sram_en     ,
+    input  wire                     inst_sram_wr     ,
+    input  wire   [ 1:0]            inst_sram_size   ,
+    input  wire   [ 3:0]            inst_sram_wstrb  ,
+    input  wire   [31:0]            inst_sram_addr   ,
+    input  wire   [31:0]            inst_sram_wdata  ,
+    output wire   [31:0]            inst_sram_rdata  ,
+    output wire                     inst_sram_addr_ok,
+    output wire                     inst_sram_data_ok,
     
     // data sram interface
-    input  wire          data_sram_en    ,
-    input  wire          data_sram_wr     ,
-    input  wire   [ 3:0] data_sram_wstrb  ,
-    input  wire   [ 1:0] data_sram_size   , 
-    input  wire   [31:0] data_sram_addr   ,
-    input  wire   [31:0] data_sram_wdata  ,
-    output wire   [31:0] data_sram_rdata  ,
-    output wire          data_sram_addr_ok,
-    output wire          data_sram_data_ok
+    input  wire                     data_sram_en     ,
+    input  wire                     data_sram_wr     ,
+    input  wire   [ 3:0]            data_sram_wstrb  ,
+    input  wire   [ 1:0]            data_sram_size   , 
+    input  wire   [31:0]            data_sram_addr   ,
+    input  wire   [31:0]            data_sram_wdata  ,
+    output wire   [31:0]            data_sram_rdata  ,
+    output wire                     data_sram_addr_ok,
+    output wire                     data_sram_data_ok
 );
-
-
-
-
-
-
-
-
-
 
     wire reset;
     assign reset = ~resetn;
@@ -129,15 +120,6 @@ module transfer_bridge(
     //b
     reg bready_reg;
     assign bready = bready_reg;
-
-
-
-
-
-
-
-
-
 
     // state machine
 

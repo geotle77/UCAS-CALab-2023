@@ -78,9 +78,9 @@ assign tlb_trans = ~dmw_hit0 & ~dmw_hit1 & ~direct;
 assign ecode_pif = tlb_trans & ~s_v;
 assign ecode_ppi = tlb_trans & ((csr_crmd_plv > s_plv));//
 assign ecode_tlbr = tlb_trans & ~s_found;
-assign ecode_pil = 1'b0;
-assign ecode_pis = 1'b0;
-assign ecode_pme = 1'b0;
+assign ecode_pil = flag[1]?1'b0:tlb_trans & ~s_v;
+assign ecode_pis = flag[1]?1'b0:tlb_trans & ~s_v;
+assign ecode_pme = flag[1]?1'b0:tlb_trans & ~s_d;
 
 
 //TODO:if it is direct ,it should also consider the error inst!

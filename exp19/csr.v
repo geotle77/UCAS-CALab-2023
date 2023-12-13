@@ -16,57 +16,57 @@ module csr(
 
 
     // exp18
-    output reg  [ 9:0]      csr_asid_asid,
-    output reg  [18:0]      csr_tlbehi_vppn,
-    output reg  [ 3:0]      csr_tlbidx_index,
+    output reg  [ 9:0]                  csr_asid_asid,
+    output reg  [18:0]                  csr_tlbehi_vppn,
+    output reg  [ 3:0]                  csr_tlbidx_index,
 
 
-    
-    input  wire             r_tlb_e,
-    input  wire [ 5:0]      r_tlb_ps,
-    input  wire [18:0]      r_tlb_vppn,
-    input  wire [ 9:0]      r_tlb_asid,
-    input  wire             r_tlb_g,
 
-    input  wire [19:0]      r_tlb_ppn0,
-    input  wire [ 1:0]      r_tlb_plv0,
-    input  wire [ 1:0]      r_tlb_mat0,
-    input  wire             r_tlb_d0,
-    input  wire             r_tlb_v0,
+    input  wire                         r_tlb_e,
+    input  wire [ 5:0]                  r_tlb_ps,
+    input  wire [18:0]                  r_tlb_vppn,
+    input  wire [ 9:0]                  r_tlb_asid,
+    input  wire                         r_tlb_g,
 
-    input  wire [19:0]      r_tlb_ppn1,
-    input  wire [ 1:0]      r_tlb_plv1,
-    input  wire [ 1:0]      r_tlb_mat1,
-    input  wire             r_tlb_d1,
-    input  wire             r_tlb_v1,
+    input  wire [19:0]                  r_tlb_ppn0,
+    input  wire [ 1:0]                  r_tlb_plv0,
+    input  wire [ 1:0]                  r_tlb_mat0,
+    input  wire                         r_tlb_d0,
+    input  wire                         r_tlb_v0,
 
-    output wire             w_tlb_e,
-    output wire [ 5:0]      w_tlb_ps,
-    output wire [18:0]      w_tlb_vppn,
-    output wire [ 9:0]      w_tlb_asid,
-    output wire             w_tlb_g,
+    input  wire [19:0]                  r_tlb_ppn1,
+    input  wire [ 1:0]                  r_tlb_plv1,
+    input  wire [ 1:0]                  r_tlb_mat1,
+    input  wire                         r_tlb_d1,
+    input  wire                         r_tlb_v1,
 
-    output wire [19:0]      w_tlb_ppn0,
-    output wire [ 1:0]      w_tlb_plv0,
-    output wire [ 1:0]      w_tlb_mat0,
-    output wire             w_tlb_d0,
-    output wire             w_tlb_v0,
+    output wire                         w_tlb_e,
+    output wire [ 5:0]                  w_tlb_ps,
+    output wire [18:0]                  w_tlb_vppn,
+    output wire [ 9:0]                  w_tlb_asid,
+    output wire                         w_tlb_g,
 
-    output wire [19:0]      w_tlb_ppn1,
-    output wire [ 1:0]      w_tlb_plv1,
-    output wire [ 1:0]      w_tlb_mat1,
-    output wire             w_tlb_d1,
-    output wire             w_tlb_v1,
+    output wire [19:0]                  w_tlb_ppn0,
+    output wire [ 1:0]                  w_tlb_plv0,
+    output wire [ 1:0]                  w_tlb_mat0,
+    output wire                         w_tlb_d0,
+    output wire                         w_tlb_v0,
 
-    output wire [ 3:0]      r_index,
-    output wire [ 3:0]      w_index,
-    output wire             we,
+    output wire [19:0]                  w_tlb_ppn1,
+    output wire [ 1:0]                  w_tlb_plv1,
+    output wire [ 1:0]                  w_tlb_mat1,
+    output wire                         w_tlb_d1,
+    output wire                         w_tlb_v1,
+
+    output wire [ 3:0]                  r_index,
+    output wire [ 3:0]                  w_index,
+    output wire                         we,
 
     // exp19
-    output wire [31:0] csr_crmd_rvalue,
-    output wire [31:0] csr_asid_rvalue,
-    output wire [31:0] csr_dmw0_rvalue,
-    output wire [31:0] csr_dmw1_rvalue  
+    output wire [31:0]                  csr_crmd_rvalue,
+    output wire [31:0]                  csr_asid_rvalue,
+    output wire [31:0]                  csr_dmw0_rvalue,
+    output wire [31:0]                  csr_dmw1_rvalue  
 );
 
     //ws2csr_bus
@@ -111,7 +111,7 @@ module csr(
     assign r_index = csr_tlbidx_index;
     assign w_index = {4{tlbwe_op[0]}}& csr_tlbidx_index | {4{tlbwe_op[1]}}& rand_idx;
 
-    // CRMD 当前模式信息
+    // CRMD Current mode information
     wire [31: 0] csr_crmd_rvalue;
     reg  [ 1: 0] csr_crmd_plv;      //CRMD's PLV domain, current privilege level
     reg          csr_crmd_ie;       //CRMD's global interrupt enable signal
@@ -120,31 +120,31 @@ module csr(
     reg  [ 6: 5] csr_crmd_datf;
     reg  [ 8: 7] csr_crmd_datm;
 
-    // PRMD 例外前模式信�???
+    // PRMD  Pre-exception mode information
     wire [31: 0] csr_prmd_rvalue;
     reg  [ 1: 0] csr_prmd_pplv;     //Old value of CRMD's PLV field
     reg          csr_prmd_pie;      //Old value of CRMD's PIE field
 
-    // ESTAT 例外状�??
+    // ESTAT exceptional state
     wire [31: 0] csr_estat_rvalue;    
     reg  [12: 0] csr_estat_is;      // Status bits for exception interrupts, 8 hardware interrupts + 1 timer interrupt + 1 inter-core interrupt + 2 software interrupts)
     reg  [ 5: 0] csr_estat_ecode;   // Exception type level-1 code
     reg  [ 8: 0] csr_estat_esubcode;// Exception type level-2 code
 
-    // ERA 例外返回地址
+    // ERA Exception return address
     wire [31: 0] csr_era_rvalue;
     reg  [31: 0] csr_era_data;  
     wire [31: 0] tlb_ex_entry;
     assign ex_entry = tlb_entry_en? tlb_ex_entry:csr_eentry_rvalue;
     assign tlb_ex_entry = csr_tlbrentry_rvalue;
 
-    // EENTRY 例外入口地址
+    // EENTRY Exception Entrance Address
     wire [31: 0] csr_eentry_rvalue;   
     reg  [25: 0] csr_eentry_va;     // Exception Interrupt Entry High Address
 
     assign ertn_entry = csr_era_rvalue;
     
-    // SAVE0-3 数据保存
+    // SAVE0-3 Data retention
     wire [31:0] csr_save0_rvalue;
     wire [31:0] csr_save1_rvalue;
     wire [31:0] csr_save2_rvalue;
@@ -157,33 +157,33 @@ module csr(
 
 
 
-    // ECFG 例外控制
+    // ECFG Exception control
     reg [12:0] csr_ecfg_lie;
     wire [31:0] csr_ecfg_rvalue;
     
-    // BADV 出错虚地�???
+    // BADV error virtual address 
     wire [31:0] csr_badv_rvalue;
     wire wb_ex_addr_err;
     reg [31:0] csr_badv_vaddr;
 
-    // TID 定时器编�???
+    // TID Timer ID
     wire [31:0] csr_tid_rvalue;
     reg [31:0] csr_tid_tid ;
 
 
-    // TCFG 定时器配�???
+    // TCFG Timer Configuration
     reg csr_tcfg_en ; 
     reg csr_tcfg_periodic ;
     reg [29:0] csr_tcfg_initval ;
     wire [31:0] csr_tcfg_rvalue ;
 
-    // TVAL 定时器数�???
+    // TVAL Timer value
     wire [31:0] tcfg_next_value ;
     reg  [31:0] timer_cnt ;
     wire [31:0] csr_tval_timeval;
     wire [31:0] csr_tval_rvalue ;
 
-    // TICLR 定时中断清除
+    // TICLR Timed interrupt clear
     wire csr_ticlr_clr ;
     wire [31:0] csr_ticlr_rvalue ;
 
