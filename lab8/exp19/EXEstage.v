@@ -197,6 +197,7 @@ wire        es_ale         ;
 wire [ 5:0] ds_ecode       ;
 wire [ 8:0] ds_esubcode    ;
 wire [ 5:0] es_ecode       ;
+wire [ 5:0]  es_exc_ecode;
 wire es_adem;
 
 
@@ -392,53 +393,26 @@ assign invtlb_valid   = es_inst_invtlb;
 assign invtlb_op      = es_invtlb_op;
 
 //exp 19
-wire csr_crmd_da;
-wire csr_crmd_pg;
-wire [1:0] csr_crmd_plv;
-
-assign csr_crmd_da = csr_crmd_rvalue[`CSR_CRMD_DA];
-assign csr_crmd_pg = csr_crmd_rvalue[`CSR_CRMD_PG];
-assign csr_crmd_plv = csr_crmd_rvalue[`CSR_CRMD_PLV];
-
-wire        direct; //direct addr translation
-wire        dmw_hit0  ;
-wire        dmw_hit1  ;
-wire [31:0] dmw_paddr0;
-wire [31:0] dmw_paddr1;
-wire [31:0] tlb_paddr ;
-wire        tlb_trans;
-wire        ecode_pil ; //load Action Page Invalid Exception
-wire        ecode_pis ; //Store Operation Page Invalid Exception
-wire        ecode_pif ;//Invalid Finger Fetching Page Exception
-wire        ecode_pme ;//Page modification exceptions
-wire        ecode_ppi ;//Page Privilege Level Noncompliance Exception
-wire        ecode_tlbr;//TLB Refill Exception
-
-assign direct = csr_crmd_da & ~ csr_crmd_pg;
-
-assign dmw_hit0 = csr_dmw0_rvalue[csr_crmd_plv] && (csr_dmw0_rvalue[31:29] == es_alu_result[31:29]);
-assign dmw_hit1 = csr_dmw1_rvalue[csr_crmd_plv] && (csr_dmw1_rvalue[31:29] == es_alu_result[31:29]);
-assign dmw_paddr0 = {csr_dmw0_rvalue[27:25], es_alu_result[28:0]};
-assign dmw_paddr1 = {csr_dmw1_rvalue[27:25], es_alu_result[28:0]}; 
-
-assign tlb_trans = ~dmw_hit0 & ~dmw_hit1 & ~direct;
-
-wire [5:0] es_exc_ecode;
-assign ecode_pif = 1'b0 ;
-assign ecode_ppi = tlb_trans & (csr_crmd_plv > s1_plv);
-assign ecode_tlbr = tlb_trans & ~s1_found;
-assign ecode_pil = tlb_trans & ~s1_v & es_res_from_mem;
-assign ecode_pis = tlb_trans & ~s1_v & es_mem_we;
-assign ecode_pme = tlb_trans & ~s1_d & es_mem_we;
-assign es_exc_ecode = direct ? 6'b0 :  {ecode_pil, ecode_pis, ecode_pif, ecode_pme, ecode_ppi, ecode_tlbr} & {6{es_need_mem}}; //only check tlb error when it is ld or store
-
-assign tlb_paddr = (s1_ps == 6'd12) ? {s1_ppn[19:0], es_alu_result[11:0]} : {s1_ppn[19:10], es_alu_result[21:0]};
-
-assign data_sram_addr = direct ? es_alu_result
-                      : dmw_hit0 ? dmw_paddr0
-                      : dmw_hit1 ? dmw_paddr1
-                      : tlb_paddr;
-
+assign es_exc_ecode = es_exc & {6{es_need_mem}}; //only check tlb error when it is ld or store
+MMU EXEC_mmu(
+    .csr_crmd_rvalue(csr_crmd_rvalue),
+    .csr_asid_rvalue(csr_asid_rvalue),
+    .csr_dmw0_rvalue(csr_dmw0_rvalue),
+    .csr_dmw1_rvalue(csr_dmw1_rvalue),
+    
+    .s_found(s1_found),
+    .s_index(s1_index),
+    .s_ppn(s1_ppn),
+    .s_ps(s1_ps),
+    .s_plv(s1_plv),
+    .s_mat(s1_mat),
+    .s_d(s1_d),
+    .s_v(s1_v),
+    
+    .va(es_alu_result),
+    .exc_ecode(es_exc_ecode),
+    .pa(inst_sram_addr)
+)
 
 
 endmodule
