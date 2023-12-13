@@ -152,10 +152,10 @@ wire        r_d1;
 wire        r_v1;
 
 //exp 19
-wire [31:0] csr_crmd_rvalue,
-wire [31:0] csr_asid_rvalue,
-wire [31:0] csr_dmw0_rvalue,
-wire [31:0] csr_dmw1_rvalue 
+wire [31:0] csr_crmd_rvalue;
+wire [31:0] csr_asid_rvalue;
+wire [31:0] csr_dmw0_rvalue;
+wire [31:0] csr_dmw1_rvalue;
 
 
 
@@ -258,7 +258,7 @@ EXEstage my_exe (
 
     .es_block         (es_block),
     .es_mem_block     (es_mem_block),
-    .mul_block            (mul_block),
+    .mul_block        (mul_block),
 
     .mul_result       (mul_result),
 
@@ -278,14 +278,12 @@ EXEstage my_exe (
     .csr_asid_asid    (csr_asid_asid),
     .csr_tlbehi_vppn  (csr_tlbehi_vppn),
     .ms_csr_tlbrd     (ms_csr_tlbrd),
-    .ws_csr_tlbrd    (ws_csr_tlbrd),
+    .ws_csr_tlbrd      (ws_csr_tlbrd),
     // exp 19
     .csr_crmd_rvalue  (csr_crmd_rvalue),
     .csr_asid_rvalue  (csr_asid_rvalue),
     .csr_dmw0_rvalue  (csr_dmw0_rvalue),
     .csr_dmw1_rvalue  (csr_dmw1_rvalue),
-    .s1_found         (s1_found),
-    .s1_index         (s1_index),
     .s1_ppn           (s1_ppn),
     .s1_ps            (s1_ps),
     .s1_plv           (s1_plv),
@@ -347,6 +345,8 @@ WBstage my_wb (
     .ws_reflush       (ws_reflush),
     .ws_ex            (wb_ex),
     .ws2csr_bus       (ws2csr_bus),
+    
+    .ws_csr_tlbrd      (ws_csr_tlbrd),
 
 
 

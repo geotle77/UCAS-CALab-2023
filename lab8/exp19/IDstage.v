@@ -571,9 +571,10 @@ assign ds_ecode = ds_has_int   ? `ECODE_INT
                 : ds_adef      ? `ECODE_ADE
                 : ds_ine       ? `ECODE_INE
                 : inst_break   ? `ECODE_BRK
-                : ds_tlb_exc_data[0] ? `ECODE_TLBR   // priority: TLBR > else
-                : ds_tlb_exc_data[3] ? `ECODE_PIF
-                : ds_tlb_exc_data[1] ? `ECODE_PPI: 6'b0;
+                : inst_syscall ? `ECODE_SYS
+                : ds_exc_ecode[0] ? `ECODE_TLBR   // priority: TLBR > else
+                : ds_exc_ecode[3] ? `ECODE_PIF
+                : ds_exc_ecode[1] ? `ECODE_PPI: 6'b0;
 assign ds_esubcode = ds_adef ? `ESUBCODE_ADEF : 9'b0;
 assign ds_exc_data = {ds_csr_op,
                      ds_adef,      //97:97

@@ -231,7 +231,7 @@ reg pfs_reflush;
 always @(posedge clk) begin
     if(~resetn)
         pfs_reflush <= 1'b0;
-    else if(inst_sram_en && (fs_reflush | br_taken &~ br_stall | (br_stall | fs_br_stall)&inst_sram_addr_ok))
+    else if(inst_sram_en && (fs_reflush | ((br_taken &~ br_stall) | (br_stall | fs_br_stall))&inst_sram_addr_ok))
         pfs_reflush <= 1'b1;
     else if(inst_sram_data_ok)
         pfs_reflush <= 1'b0;

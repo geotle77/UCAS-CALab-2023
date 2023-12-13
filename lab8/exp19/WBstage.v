@@ -61,7 +61,6 @@ wire          ws_gr_we;
 wire [4:0]    ws_dest;
 wire [31:0]   ws_final_result;
 wire [31: 0]  ws_rkd_value;
-wire [`TLB_EXC_INFO_WD -1 : 0] ws_tlb_exc_data;
 wire [`MS_EXC_DATA_WD -1 : 0] ws_exc_data;
 reg  [`MS2WS_BUS_LEN -1 : 0]  ms2ws_bus_reg;
 assign {ws_exc_ecode,
@@ -93,7 +92,6 @@ assign {
         ws_csr_re       
       }  = ws_exc_data & {`MS_EXC_DATA_WD {ws_valid}};    // wb_ex=inst_syscall, ertn_flush=inst_ertn
 //TODO:Packaging wb-level to csr-level interaction pathways about TLBs
-assign ws_tlb_exc_data = {tlbrd_we, tlbsrch_we, tlbsrch_hit, tlbsrch_hit_index} ;
 
 wire rf_we;
 wire [4:0] rf_waddr;
