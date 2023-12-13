@@ -256,7 +256,7 @@ end
 wire    fs_inst_cancel;
 assign  fs_inst_cancel = fs_reflush | fs_reflush_reg | br_taken & ~br_stall | fs_br_taken;
 
-s0_va_highbits = nextpc[31:22];
+s0_va_highbits = nextpc[31:12];
 s0_asid = csr_asid_rvalue[`CSR_ASID_ASID];
 //exp 19 
 MMU IF_mmu(

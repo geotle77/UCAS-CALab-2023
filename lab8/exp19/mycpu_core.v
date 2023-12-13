@@ -266,8 +266,6 @@ EXEstage my_exe (
     .es_csr_re        (es_csr_re),
     .es_reflush       (ws_reflush),
 
-
-
     // exp 18
     .s1_va_highbits   ({s1_vppn, s1_va_bit12}),
     .s1_asid          (s1_asid),
@@ -316,10 +314,6 @@ MEMstage my_mem (
     .ms_reflush       (ws_reflush),
     .ms_csr_re        (ms_csr_re),
 
-
-    // exp 18
-    //.s1_found        (s1_found),
-    //.s1_index        (s1_index),
     .ms_csr_tlbrd    (ms_csr_tlbrd)
 );
 
@@ -346,21 +340,8 @@ WBstage my_wb (
     .ws_ex            (wb_ex),
     .ws2csr_bus       (ws2csr_bus),
     
-    .ws_csr_tlbrd      (ws_csr_tlbrd),
+    .ws_csr_tlbrd      (ws_csr_tlbrd)
 
-
-
-    // exp 18
-    .r_index         (r_index),
-    .tlbrd_we        (tlbrd_we),
-    .csr_tlbidx_index(csr_tlbidx_index),
-
-    .w_index         (w_index),
-    .we              (we),
-    
-    .tlbsrch_we      (tlbsrch_we),
-    .tlbsrch_hit     (tlbsrch_hit),
-    .tlbsrch_hit_index(tlbsrch_hit_index)
 );
 
 
@@ -375,17 +356,13 @@ csr u_csr(
     .ws2csr_bus     (ws2csr_bus),
     .has_int        (csr_has_int),
 
-
-
     // exp 18
     .csr_asid_asid   (csr_asid_asid),
     .csr_tlbehi_vppn (csr_tlbehi_vppn),
-    .csr_tlbidx_index(csr_tlbidx_index),
 
-    .tlbsrch_we        (tlbsrch_we),
-    .tlbsrch_hit       (tlbsrch_hit),
-    .tlbsrch_hit_index (tlbsrch_hit_index),
-    .tlbrd_we          (tlbrd_we),
+    .w_index         (w_index),
+    .we              (we),
+    .r_index         (r_index),
 
     .r_tlb_e         (r_e),
     .r_tlb_ps        (r_ps),
@@ -418,6 +395,7 @@ csr u_csr(
     .w_tlb_mat1      (w_mat1),
     .w_tlb_d1        (w_d1),
     .w_tlb_v1        (w_v1),
+
     .csr_crmd_rvalue (csr_crmd_rvalue),
     .csr_asid_rvalue (csr_asid_rvalue),
     .csr_dmw0_rvalue (csr_dmw0_rvalue),
