@@ -31,8 +31,9 @@ module cache(
     
     input           rd_rdy,
     input           ret_valid,
-    input           ret_last,
-    input  [31:0]   ret_data
+    input  [31:0]   ret_data,
+
+    input           ret_last
 );
 
     wire rst = ~resetn;
@@ -266,8 +267,8 @@ module cache(
     assign tagv_we[1] = ret_valid & ret_last &  replace_way;
     /* only when tag compare and replace do we read tagv,
     and only when refill do we write tagv*/
-    assign tagv_addr[0] = cur_state[`IDLE] ? index : index_reg;
-    assign tagv_addr[1] = cur_state[`IDLE] ? index : index_reg;
+    assign tagv_addr[0] = cur_state[`IDLE] || cur_state[`LOOKUP] ? index : index_reg;
+    assign tagv_addr[1] = cur_state[`IDLE] || cur_state[`LOOKUP] ? index : index_reg;
     assign tagv_wdata[0] = {1'b1, tag_reg};
     assign tagv_wdata[1] = {1'b1, tag_reg};
 
