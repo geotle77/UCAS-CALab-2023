@@ -513,7 +513,7 @@ module transfer_bridge(
     assign icache_rd_rdy = rreq_curr_state == READ_REQ_END && ~arid[0];
     assign icache_ret_valid = (|rdata_curr_state[3:2]) && ~rid_reg[0];
     assign icache_ret_last = rdata_curr_state[3] && ~rid_reg[0];
-    assign data_sram_addr_ok = (rreq_curr_state == READ_REQ_END && arid[0]) || (wrd_curr_state == WRITE_END); //read or write
+    assign data_sram_addr_ok = arid[0] & arvalid & arready | wid[0] & awvalid & awready ; //read or write
     assign data_sram_data_ok = ((|rdata_curr_state[3:2]) && rid_reg[0]) || (wrsp_curr_state == WRITE_RSP_END); //read or write
 
     reg [31:0] inst_sram_buf;
