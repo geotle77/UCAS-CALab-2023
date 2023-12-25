@@ -41,7 +41,7 @@ module IFstage (
     output wire [ 9:0]                s0_asid,
 
     //Icache
-    output wire [31:0]                inst_addr_vrtl 
+    output wire [31:0]                inst_addr_vrtl
 );
 
 
@@ -165,6 +165,7 @@ assign fs_wrong_addr = fs_pc;
 assign fs_exc_data    = {fs_valid & fs_adef, // 32:32
                          fs_wrong_addr       // 31:0
                         };
+
 
 
 

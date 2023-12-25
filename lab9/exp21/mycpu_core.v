@@ -177,6 +177,13 @@ wire[1 :0] es_plv;
 wire       es_dmwhit;
 wire[1 :0] es_mmu_en;
 
+wire ws_refetch_flush;
+wire [31:0] ex_entry_refetchtarget;
+wire [31:0] ws_pc;
+assign ex_entry_refetchtarget = ws_refetch_flush ? ws_pc + 3'h4 : csr_ex_entry; // add
+
+
+
 IFstage my_if (
     .clk                    (clk),
     .resetn                 (resetn),
@@ -196,10 +203,10 @@ IFstage my_if (
     .ds_allowin             (ds_allowin),
     .fs2ds_valid            (fs2ds_valid),
 
-    .csr_ex_entry           (csr_ex_entry  ),
+    .csr_ex_entry           (ex_entry_refetchtarget  ),
     .csr_ertn_entry         (csr_ertn_entry),
     .ertn_flush             (ertn_flush),
-    .wb_ex                  (wb_ex     ),
+    .wb_ex                  (wb_ex | ws_refetch_flush), // add
     .fs_reflush             (ws_reflush),
 
     .s0_va_highbits         ({s0_vppn, s0_va_bit12}),/*TODO:Note that these two lines should have been placed in the MMU module as well, 
@@ -400,7 +407,10 @@ WBstage my_wb (
     .ws_ex                  (wb_ex),
     .ws2csr_bus             (ws2csr_bus),
     
-    .ws_csr_tlbrd           (ws_csr_tlbrd)
+    .ws_csr_tlbrd           (ws_csr_tlbrd),
+    
+    .ws_refetch_flush(ws_refetch_flush),
+    .ws_pc (ws_pc)
 
 );
 

@@ -27,7 +27,10 @@ module WBstage (
     output wire [4:0]                   debug_wb_rf_wnum  ,
     output wire [31:0]                  debug_wb_rf_wdata ,
     
-    output wire                         ws_csr_tlbrd
+    output wire                         ws_csr_tlbrd,
+    
+    output wire ws_refetch_flush,
+    output wire [31:0] ws_pc
 
 );
 
@@ -42,7 +45,7 @@ wire          ws_inst_tlbfill;
 wire          ws_tlbsrch_hit;
 wire [ 3:0]   ws_tlbsrch_hit_index;
 wire [ 5:0]   ws_exc_ecode;
-wire [31:0]   ws_pc;
+//wire [31:0]   ws_pc;
 wire          ws_gr_we;
 wire [4:0]    ws_dest;
 wire [31:0]   ws_final_result;
@@ -160,6 +163,7 @@ end
 
 assign ws_csr_wvalue = ws_rkd_value;
 assign ws_reflush = ws_ertn_flush | ws_ex | ws_refetch_flg & ws_valid;
+assign ws_refetch_flush = ws_refetch_flg && ws_valid; // add
 
 assign rf_we = ws_gr_we && ws_valid && ~ws_ex;
 assign rf_waddr = ws_dest;
