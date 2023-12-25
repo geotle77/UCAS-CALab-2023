@@ -53,7 +53,7 @@ wire [31: 0]  ws_rkd_value;
 wire [`MS_EXC_DATA_WD -1 : 0] ws_exc_data;
 reg  [`MS2WS_BUS_LEN -1 : 0]  ms2ws_bus_reg;
 assign {ws_exc_ecode,
-        ws_refetch_flg,
+        ws_refetch_flg_inst,
         ws_inst_tlbsrch,
         ws_inst_tlbrd,
         ws_inst_tlbwr,
@@ -67,6 +67,8 @@ assign {ws_exc_ecode,
         ws_rkd_value, 
         ws_exc_data
         } = ms2ws_bus_reg;
+wire ws_refetch_flg_inst;
+assign ws_refetch_flg = ws_refetch_flg_inst && ws_valid;
 
 assign {
         ws_csr_op,
@@ -148,7 +150,7 @@ always @(posedge clk) begin
     if (reset) begin
         ws_valid <= 1'b0;
     end 
-    else if (ws_ex | ws_ertn_flush) begin
+    else if (ws_ex | ws_ertn_flush | ws_refetch_flg) begin
         ws_valid <= 1'b0;
     end
     else if (ws_allowin) begin

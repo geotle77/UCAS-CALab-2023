@@ -62,7 +62,7 @@ wire [`MS_EXC_DATA_WD-1 : 0] mem_exc_data;
 reg[`ES2MS_BUS_LEN-1:0] es2ms_bus_reg;
 assign {ms_adem,
         ms_exc_ecode,
-        ms_refetch_flg,
+        ms_refetch_flg_inst,
         ms_inst_tlbsrch,
         ms_inst_tlbrd,
         ms_inst_tlbwr,
@@ -81,6 +81,8 @@ assign {ms_adem,
         mem_rkd_value,
         mem_exc_data
         } = es2ms_bus_reg;
+wire ms_refetch_flg_inst;
+assign ms_refetch_flg = ms_refetch_flg_inst && ms_valid;
 
 wire        mem_rf_we;
 wire [31:0] mem_final_result;
@@ -131,7 +133,7 @@ always @(posedge clk) begin
   if (reset) begin
     ms_valid <= 1'b0;
   end 
-  if (ms_reflush) begin
+  if (ms_reflush || ms_refetch_flg) begin
     ms_valid <= 1'b0;
   end
   else if (ms_allowin) begin

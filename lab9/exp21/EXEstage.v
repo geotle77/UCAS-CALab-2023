@@ -100,7 +100,7 @@ wire                          es_gr_we;
 wire [4:0]                    es_dest;
 wire [`DS_EXC_DATA_WD-1 : 0]  ds_exc_data;
 wire [1:0]                    es_time_op;
-assign {es_refetch_flg,
+assign {es_refetch_flg_inst,
         es_invtlb_op,
         es_inst_tlbsrch,
         es_inst_tlbrd,
@@ -122,6 +122,8 @@ assign {es_refetch_flg,
         ds_exc_data,
         es_time_op
         } = ds2es_bus_reg;
+wire es_refetch_flg_inst;
+assign es_refetch_flg = es_refetch_flg_inst && es_valid;
 
 
 
@@ -279,7 +281,7 @@ always @(posedge clk) begin
     if (reset) begin
         es_valid <= 1'b0;
     end 
-    else if(es_reflush) begin
+    else if(es_reflush || es_refetch_flg) begin
         es_valid <= 1'b0;
     end else if (es_allowin) begin
         es_valid <= ds2es_valid;

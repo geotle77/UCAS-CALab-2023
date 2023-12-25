@@ -64,7 +64,7 @@ assign {ds_adef, ds_wrong_addr} = fs_exc_data;
 // fs to ds bus
 reg [`FS2DS_BUS_LEN-1: 0] fs2ds_bus_reg;
 always @(posedge clk) begin
-    if (reset || ds_reflush) begin
+    if (reset || ds_reflush || ds_refetch_flg) begin
       ds_valid <= 1'b0;
     end else if (ds_allowin) begin
       ds_valid <= fs2ds_valid;
@@ -593,8 +593,9 @@ wire [3:0]  ds_csr_op;
 assign ds_csr_op = {inst_rdcntid, inst_csrxchg, inst_csrwr, inst_csrrd};
 //TODO:why we need refetch in these cases?
 /*These instructions block whenever they occur, regardless of whether or not they are write-after-read related.*/
-assign ds_refetch_flg = inst_tlbfill || inst_tlbwr || inst_tlbrd || inst_invtlb ||
-                        (ds_csr_we) && (ds_csr_num == `CSR_CRMD || ds_csr_num == `CSR_ASID);
+assign ds_refetch_flg = ds_valid &&
+                        (inst_tlbfill || inst_tlbwr || inst_tlbrd || inst_invtlb ||
+                        (ds_csr_we) && (ds_csr_num == `CSR_CRMD || ds_csr_num == `CSR_ASID));
 assign invtlb_op = rd;
 
 endmodule
