@@ -95,9 +95,9 @@ always @(posedge clk) begin
 end
 
 assign to_fs_valid = pfs_valid && pfs_ready_go;
-assign pfs_ready_go = inst_sram_en && inst_sram_addr_ok && ~(pfs_reflush | fs_reflush | br_taken &~br_stall | br_stall);//the addr is accepted then enter IF stage//my
+assign pfs_ready_go = inst_sram_en && inst_sram_addr_ok && ~(fs_reflush | br_taken &~br_stall | br_stall);//pfs_reflush | the addr is accepted then enter IF stage//my
 
-assign inst_sram_en       = fs_allowin & pfs_valid & ~pfs_reflush; // consider the case if pfs_valid :1 but fs_allowin :0//my
+assign inst_sram_en       = fs_allowin & pfs_valid ;//& ~pfs_reflush; // consider the case if pfs_valid :1 but fs_allowin :0//my
 //simple solution : fs_allowin =1 then inst_sram_en =1 to avoid the pfs_ready_go =1 but fs_allowin =0,which can't keep the inst
 //this method is not good, because it arise more delay
 assign inst_sram_wr       = 1'b0;
@@ -183,15 +183,16 @@ always @(posedge clk) begin
     fs_ex_valid <= 1'b0;
     fs_ertn_entry <= 32'b0;
     fs_ex_entry <= 32'b0;
+  end  
+  else if(wb_ex) begin
+    fs_ex_valid <= wb_ex;
+    fs_ex_entry <= csr_ex_entry;
   end
   else if(ertn_flush) begin
     fs_ertn_valid <= ertn_flush;
     fs_ertn_entry <= csr_ertn_entry;
   end
-  else if(wb_ex) begin
-    fs_ex_valid <= wb_ex;
-    fs_ex_entry <= csr_ex_entry;
-  end
+
 end
 
 always @(posedge clk) begin
