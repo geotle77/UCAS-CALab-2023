@@ -30,21 +30,12 @@ module IFstage (
     input wire [31: 0]                csr_ex_entry,
     input wire [31: 0]                csr_ertn_entry,
     //exp19
-     // from csr
-    input wire  [31:0]                csr_crmd_rvalue,
-    input wire  [31:0]                csr_asid_rvalue,
-    input wire  [31:0]                csr_dmw0_rvalue,
-    input wire  [31:0]                csr_dmw1_rvalue,
-
-    // from tlb
-    input  wire                       s0_found,
-    input  wire [ 3:0]                s0_index,
-    input  wire [19:0]                s0_ppn,
-    input  wire [ 5:0]                s0_ps,
-    input  wire [ 1:0]                s0_plv,
-    input  wire [ 1:0]                s0_mat,
-    input  wire                       s0_d,
-    input  wire                       s0_v, 
+    output wire [31:0]                va,
+    input  wire [31:0]                pa,
+    input wire  [ 5:0]                fs_exc_ecode,
+    input wire                        dmw_hit,
+    input wire  [1:0]                 plv,
+    input wire  [9:0]                 mmu_asid,
     // to tlb
     output wire [19:0]                s0_va_highbits,
     output wire [ 9:0]                s0_asid
@@ -54,7 +45,7 @@ module IFstage (
 wire [31:0] seq_pc;
 wire [31:0] nextpc;
 
-wire br_stall;//
+wire br_stall;
 wire br_taken;
 wire [31:0] br_target;
 
@@ -69,6 +60,21 @@ reg  pfs_valid;
 wire pfs_ready_go;
 wire to_fs_valid;
 
+
+//exp13
+wire        fs_adef;
+wire [31:0] fs_wrong_addr;
+wire [`FS_EXC_DATA_WD-1:0] fs_exc_data;
+
+reg fs_ertn_valid;//delay ertn_flush
+reg fs_ex_valid;//delay wb_ex
+reg [31: 0]fs_ertn_entry;
+reg [31: 0]fs_ex_entry;
+reg fs_br_taken;
+reg [31: 0] fs_br_target;
+reg fs_br_stall;
+
+wire [5:0] fs_exc_ecode;
 assign {br_stall, br_taken, br_target} = br_zip;
 
 //------------------pre-IF stage------------------
@@ -140,27 +146,18 @@ assign fs2ds_bus = {fs_exc_ecode,   //102:97
 assign fs2ds_valid = fs_valid && fs_ready_go && ~fs_inst_cancel ;
 
 //////////excption information////////
-//exp13
-wire        fs_adef;
-wire [31:0] fs_wrong_addr;
-wire [`FS_EXC_DATA_WD-1:0] fs_exc_data;
+
 //TODO:why we should check the fs_pc[31]?
 /*this is because the fs[31] can be used to distinguish between user space and kernel space, 
 and only high privileges can access kernel space  
 */
-assign fs_adef = fs_pc[1] | fs_pc[0] |(csr_crmd_plv == 2'd3 & fs_pc[31] & ~(dmw_hit0 | dmw_hit1)); 
+assign fs_adef = fs_pc[1] | fs_pc[0] |(plv == 2'd3 & fs_pc[31] & ~(dmw_hit)); 
 assign fs_wrong_addr = fs_pc;
 assign fs_exc_data    = {fs_valid & fs_adef, // 32:32
                          fs_wrong_addr       // 31:0
                         };
 
-reg fs_ertn_valid;//delay ertn_flush
-reg fs_ex_valid;//delay wb_ex
-reg [31: 0]fs_ertn_entry;
-reg [31: 0]fs_ex_entry;
-reg fs_br_taken;
-reg [31: 0] fs_br_target;
-reg fs_br_stall;
+
 
 assign seq_pc = fs_pc + 3'h4;
 assign nextpc  =  wb_ex? csr_ex_entry:   //the nextpc is updated in these cases
@@ -220,11 +217,6 @@ always @(posedge clk) begin
 end
 
 
-
-
-
-
-
 //----------add----------
 reg pfs_reflush;
 
@@ -254,78 +246,11 @@ end
 wire    fs_inst_cancel;
 assign  fs_inst_cancel = fs_reflush | fs_reflush_reg | br_taken & ~br_stall | fs_br_taken;
 
+assign va = nextpc;
+assign inst_sram_addr = pa;
 
 //exp 19 
-wire        csr_crmd_da;
-wire        csr_crmd_pg;
-wire [1:0]  csr_crmd_plv;
-wire [9:0]  csr_asid_asid;
-/*
-The legal combination of the DA bit and the PG bit is 0, 1, or 1, 0.
-*/
-assign csr_crmd_da = csr_crmd_rvalue[`CSR_CRMD_DA]; //Direct address translation mode enable
-assign csr_crmd_pg = csr_crmd_rvalue[`CSR_CRMD_PG]; //Mapped Address Translation Mode Enable
-assign csr_crmd_plv = csr_crmd_rvalue[`CSR_CRMD_PLV];//Current privilege level
-assign csr_asid_asid = csr_asid_rvalue[`CSR_ASID_ASID];//The address space identifier corresponding to the currently executing program
-
-wire        direct; //direct addr translation
-wire        dmw_hit0  ;
-wire        dmw_hit1  ;
-wire [31:0] dmw_paddr0;
-wire [31:0] dmw_paddr1;
-wire [31:0] tlb_paddr ;
-wire        tlb_trans;
-wire        ecode_pil ; //load Action Page Invalid Exception
-wire        ecode_pis ; //Store Operation Page Invalid Exception
-wire        ecode_pif ;//Invalid Finger Fetching Page Exception
-wire        ecode_pme ;//Page modification exceptions
-wire        ecode_ppi ;//Page Privilege Level Noncompliance Exception
-wire        ecode_tlbr;//TLB Refill Exception
-
-assign direct = csr_crmd_da & ~csr_crmd_pg;//direct addr translation
-/*
-The highest 3 bits of the virtual address ([31:29] bits) are the same as the [31:29] in the configuration window registers
-are equal and the current privilege level is allowed in this configuration window.
-*/
-assign dmw_hit0 = csr_dmw0_rvalue[csr_crmd_plv] && (csr_dmw0_rvalue[31:29] == nextpc[31:29]); // csr_dmw_rvalue[31:29] = csr_dmw_vseg
-assign dmw_hit1 = csr_dmw1_rvalue[csr_crmd_plv] && (csr_dmw1_rvalue[31:29] == nextpc[31:29]);
-/*
-When a virtual address hits a valid direct-mapped configuration window, 
-its physical address is directly equal to the [28:0] bits of the virtual address spliced onto the mapped window's
-Configured Physical Address High Bit
-*/
-assign dmw_paddr0 = {csr_dmw0_rvalue[`CSR_DMW_PSEG], nextpc[28:0]}; 
-assign dmw_paddr1 = {csr_dmw1_rvalue[`CSR_DMW_PSEG], nextpc[28:0]}; 
-/*
-Translating addresses addresses will be prioritized to see if 
-they can be translated according to the direct mapping model, 
-and then translated according to the page table mapping model after that.
-*/
-assign tlb_trans = ~dmw_hit0 & ~dmw_hit1 & ~direct;
-
-assign ecode_pif = tlb_trans & ~s0_v;
-assign ecode_ppi = tlb_trans & ((csr_crmd_plv > s0_plv));//
-assign ecode_tlbr = tlb_trans & ~s0_found;
-assign ecode_pil = 1'b0;
-assign ecode_pis = 1'b0;
-assign ecode_pme = 1'b0;
-
 assign s0_va_highbits = nextpc[31:12];
-assign s0_asid = csr_asid_asid;
-
-wire [5:0] fs_exc_ecode;
-assign fs_exc_ecode = direct ? 6'b0 : {ecode_pil, ecode_pis, ecode_pif, ecode_pme, ecode_ppi, ecode_tlbr};
-assign tlb_paddr = (s0_ps == 6'd12) ? {s0_ppn[19:0], nextpc[11:0]} : {s0_ppn[19:10], nextpc[21:0]};
-
-//paddr
-assign inst_sram_addr = direct ? nextpc
-                      : dmw_hit0 ? dmw_paddr0
-                      : dmw_hit1 ? dmw_paddr1
-                      : tlb_paddr;  
-
-
-
-
-
-
+assign s0_asid = mmu_asid;
 endmodule
+

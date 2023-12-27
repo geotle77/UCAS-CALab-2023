@@ -1,11 +1,11 @@
 module alu(
-  input clk,
-  input resetn,
-  input  wire [15:0] alu_op,
-  input  wire [31:0] alu_src1,
-  input  wire [31:0] alu_src2,
-  output wire [31:0] alu_result,
-  output wire        alu_flag
+  input               clk,
+  input               resetn,
+  input  wire [15:0]  alu_op,
+  input  wire [31:0]  alu_src1,
+  input  wire [31:0]  alu_src2,
+  output wire [31:0]  alu_result,
+  output wire         alu_flag
 );
 
 wire op_add;   //add operation

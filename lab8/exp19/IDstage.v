@@ -22,43 +22,43 @@ module IDstage (
     input  wire [`FORWARD_BUS_LEN-1:0]    exe_forward_zip,
     input  wire [`FORWARD_BUS_LEN-1:0]    mem_forward_zip,
 
-    output wire mul_block,      // mul or load in ID
-    input  wire es_block,       // mul or load in EXE
-    input  wire es_mem_block,   // load/store or CSRwrite/read in EXE
-    input  wire ms_mem_block,   // load/store or CSRwrite/read in MEM
+    output wire                           mul_block,      // mul or load in ID
+    input  wire                           es_block,       // mul or load in EXE
+    input  wire                           es_mem_block,   // load/store or CSRwrite/read in EXE
+    input  wire                           ms_mem_block,   // load/store or CSRwrite/read in MEM
 
-    input  wire es_csr_re,      // CSRread in EXE
-    input  wire ms_csr_re,      // CSRread in EXE
+    input  wire                           es_csr_re,      // CSRread in EXE
+    input  wire                           ms_csr_re,      // CSRread in EXE
 
-    input  wire ds_reflush,     // syscall in WB
-    input  wire ds_has_int      // interrupt from CSR
+    input  wire                           ds_reflush,     // syscall in WB
+    input  wire                           ds_has_int      // interrupt from CSR
 );
 
 
 
 
 // forward data from exe,mem,wb
-wire        rf_we;
-wire [4:0]  rf_waddr;
-wire [31:0] rf_wdata;
+wire                                 rf_we;
+wire [4 :0]                          rf_waddr;
+wire [31:0]                          rf_wdata;
 assign {rf_we, rf_waddr, rf_wdata} = rf_zip;
 
-wire        exe_rf_we;
-wire        mem_rf_we;
-wire [4:0]  exe_dest;
-wire [4:0]  mem_dest;
-wire [31:0] alu_result;
-wire [31:0] final_result;
-assign {exe_rf_we, exe_dest, alu_result}   = exe_forward_zip;//waiting to add the es_mem_block
-assign {mem_rf_we, mem_dest, final_result} = mem_forward_zip;//waiting to add the ms_mem_block
+wire                                          exe_rf_we;
+wire                                          mem_rf_we;
+wire [4 :0]                                   exe_dest;
+wire [4 :0]                                   mem_dest;
+wire [31:0]                                   alu_result;
+wire [31:0]                                   final_result;
+assign {exe_rf_we, exe_dest, alu_result}   =  exe_forward_zip;//waiting to add the es_mem_block
+assign {mem_rf_we, mem_dest, final_result} =  mem_forward_zip;//waiting to add the ms_mem_block
 
 // exception data from fs
-wire [`FS_EXC_DATA_WD-1:0]  fs_exc_data;
-wire [5 :0]                 ds_exc_ecode;
-wire [31:0]                 ds_inst;
-wire [31:0]                 ds_pc;
-wire [31:0]                 ds_wrong_addr;
-wire                        ds_adef;
+wire [`FS_EXC_DATA_WD-1:0]        fs_exc_data;
+wire [5 :0]                       ds_exc_ecode;
+wire [31:0]                       ds_inst;
+wire [31:0]                       ds_pc;
+wire [31:0]                       ds_wrong_addr;
+wire                              ds_adef;
 assign {ds_adef, ds_wrong_addr} = fs_exc_data;
 
 // fs to ds bus
@@ -105,7 +105,6 @@ assign ds2es_bus = {ds_refetch_flg, //272
                     inst_tlbwr,     //264
                     inst_tlbfill,   //263
                     inst_invtlb,    //262
-
                     ds_pc,          //230:261
                     res_from_mul,   //229:229
                     alu_src1,       //197:228
@@ -542,7 +541,7 @@ assign mul_block = (|load_op) || res_from_mul;
 
 
 //------------------exception------------------
-assign ds_ine = ~ ( inst_add_w     | inst_sub_w   | inst_slt     | inst_sltu      |
+assign ds_ine = ~ ( inst_add_w  | inst_sub_w   | inst_slt     | inst_sltu      |
                  inst_nor       | inst_and     | inst_or      | inst_xor       |   
                  inst_slli_w    | inst_srli_w  | inst_srai_w  | inst_addi_w    | 
                  inst_ld_w      | inst_st_w    | inst_jirl    | inst_b         |
@@ -556,11 +555,11 @@ assign ds_ine = ~ ( inst_add_w     | inst_sub_w   | inst_slt     | inst_sltu    
                  inst_st_b      | inst_st_h    | inst_csrrd   | inst_csrwr     |
                  inst_csrxchg   | inst_ertn    | inst_syscall | inst_break     |
                  inst_rdcntvl   | inst_rdcntvh | inst_rdcntid | inst_invtlb    |
-                 inst_tlbrd     | inst_tlbwr   | inst_tlbfill | inst_tlbsrch )
-            | inst_invtlb & (invtlb_op > 5'd6) ;
+                 inst_tlbrd     | inst_tlbwr   | inst_tlbfill | inst_tlbsrch ) | 
+                 inst_invtlb & (invtlb_op > 5'd6) ;
 assign ds_csr_re    = inst_csrrd | inst_csrwr | inst_csrxchg |inst_rdcntid;
 assign ds_csr_we    = inst_csrwr | inst_csrxchg;
-assign ds_csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
+assign ds_csr_wmask = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
 assign csr_wvalue   = rkd_value;
 assign ds_csr_num   = {14{inst_rdcntid}} & `CSR_TID | {14{~inst_rdcntid}} & ds_inst[23:10];
 
@@ -593,6 +592,7 @@ assign ds_exc_data = {ds_csr_op,
 wire [3:0]  ds_csr_op;
 assign ds_csr_op = {inst_rdcntid, inst_csrxchg, inst_csrwr, inst_csrrd};
 //TODO:why we need refetch in these cases?
+/*These instructions block whenever they occur, regardless of whether or not they are write-after-read related.*/
 assign ds_refetch_flg = inst_tlbfill || inst_tlbwr || inst_tlbrd || inst_invtlb ||
                         (ds_csr_we) && (ds_csr_num == `CSR_CRMD || ds_csr_num == `CSR_ASID);
 assign invtlb_op = rd;

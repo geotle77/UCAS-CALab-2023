@@ -41,32 +41,27 @@ module EXEstage (
 
     // exp 18
     // to tlb
+                
     output  wire [19:0]                  s1_va_highbits,
     output  wire [ 9:0]                  s1_asid,
     output  wire                         invtlb_valid,
     output  wire [ 4:0]                  invtlb_op,
         //exp 18
-    input   wire                          s1_found,   // from tlb
-    input   wire [ 3:0]                   s1_index,   // from tlb
+    input   wire                         s1_found,   // from tlb
+    input   wire [ 3:0]                  s1_index,   // from tlb
     // from csr, used for tlbsrch
     input   wire [ 9:0]                  csr_asid_asid,
     input   wire [18:0]                  csr_tlbehi_vppn,
     // blk tlbsrch
     input   wire                         ms_csr_tlbrd,
     input   wire                         ws_csr_tlbrd,
-    // from csr
-    input wire  [31:0] csr_crmd_rvalue,
-    input wire  [31:0] csr_asid_rvalue,
-    input wire  [31:0] csr_dmw0_rvalue,
-    input wire  [31:0] csr_dmw1_rvalue,
-
-    // from tlb
-    input  wire [19:0] s1_ppn,
-    input  wire [ 5:0] s1_ps,
-    input  wire [ 1:0] s1_plv,
-    input  wire [ 1:0] s1_mat,
-    input  wire        s1_d,
-    input  wire        s1_v
+    // from mmu
+    input wire [5:0]                     es_exc_ecode,
+    output wire [31:0]                   va,
+    output wire [1:0]                    mmu_en,
+    input wire [31:0]                    pa,
+    input   wire [1:0]                   plv,
+    input   wire                         dmw_hit  
 );
 
 //--------------------declaration--------------------
@@ -134,8 +129,10 @@ assign {es_refetch_flg,
 wire                        es_mem_we;
 wire                        es_res_from_mem;
 wire [`ES_EXC_DATA_WD-1:0]  es_exc_data;
+
+wire [5:0]                  es_tlb_ecode;
 assign es2ms_bus = {es_adem,
-                    es_exc_ecode,
+                    es_tlb_ecode,
                     es_refetch_flg,
                     es_inst_tlbsrch,
                     es_inst_tlbrd,
@@ -222,19 +219,19 @@ assign es_final_result  = {32{es_time_op[0]}}                 & counter[31: 0]
                         | {32{es_time_op[1]}}                 & counter[63:32]
                         | {32{~es_time_op[0]&~es_time_op[1]}} & es_alu_result;
 
-assign es_adem = es_need_mem & es_alu_result[31] & (csr_crmd_plv == 2'd3) & ~(dmw_hit0 | dmw_hit1);
+assign es_adem = es_need_mem & es_alu_result[31] & (plv == 2'd3) & ~(dmw_hit);
 assign es_wrong_addr  = ds_ex ? ds_wrong_addr : es_alu_result;
 assign es_ecode       =   ds_ex    ? ds_ecode
                         : es_adem  ? `ECODE_ADE
                         : es_ale   ? `ECODE_ALE
-                        : es_exc_ecode[0] ? `ECODE_TLBR
-                        : es_exc_ecode[5] ? `ECODE_PIL
-                        : es_exc_ecode[4] ? `ECODE_PIS
-                        : es_exc_ecode[1] ? `ECODE_PPI
-                        : es_exc_ecode[2] ? `ECODE_PME
+                        : es_tlb_ecode[0] ? `ECODE_TLBR
+                        : es_tlb_ecode[5] ? `ECODE_PIL
+                        : es_tlb_ecode[4] ? `ECODE_PIS
+                        : es_tlb_ecode[1] ? `ECODE_PPI
+                        : es_tlb_ecode[2] ? `ECODE_PME
                         : 6'h0;
 assign es_esubcode    =  es_adem ? `ESUBCODE_ADEM : ds_esubcode;
-assign es_ex          = (ds_ex | es_ale |es_adem | (|es_exc_ecode)) & es_valid;
+assign es_ex          = (ds_ex | es_ale |es_adem | (|es_tlb_ecode)) & es_valid;
 
 assign {es_csr_op,
         es_adef,         // 97
@@ -272,7 +269,7 @@ wire tlbsrch_blk;
 assign tlbsrch_blk = es_inst_tlbsrch & (ms_csr_tlbrd|ws_csr_tlbrd);
 
 wire es_ready_go;
-assign es_ready_go = es_need_mem ? (es_reflush || es_finish || data_sram_en && data_sram_addr_ok && !tlbsrch_blk|| (|es_exc_ecode) || es_adem)
+assign es_ready_go = es_need_mem ? (es_reflush || es_finish || data_sram_en && data_sram_addr_ok && !tlbsrch_blk|| (|es_tlb_ecode) || es_adem)
                                     : (es_reflush || alu_flag && es_valid && !tlbsrch_blk); 
 assign es_allowin = ~es_valid || es_ready_go && ms_allowin;
 assign es2ms_valid = es_valid && es_ready_go;
@@ -354,7 +351,7 @@ assign mem_we=(|es_store_op);
 assign es_mem_we = mem_we & ~es_reflush & ~ms_ex_to_es & ~st_ale;
 assign es_rf_we = es_valid && es_gr_we;
 
-assign data_sram_en    =  ~es_finish && es_need_mem && ms_allowin &&~(|es_exc_ecode) && ~es_adem;//1'b1;
+assign data_sram_en    =  ~es_finish && es_need_mem && ms_allowin &&~(|es_tlb_ecode) && ~es_adem;//1'b1;
 assign data_sram_size  = (es_store_op[0] | es_load_op[0] | es_load_op[3]) ? 2'b00   // load b, bu or store b
                        : (es_store_op[1] | es_load_op[1] | es_load_op[4]) ? 2'b01   // load h, hu or store h
                        : 2'b10;
@@ -379,9 +376,6 @@ booth_multiplier u_mul(
   .z(mul_result)
 );
 
-
-
-
 assign es_tlbsrch_hit = s1_found & es_inst_tlbsrch;
 assign es_tlbsrch_hit_index = s1_index & {4{es_inst_tlbsrch}};
 
@@ -392,53 +386,16 @@ assign invtlb_valid   = es_inst_invtlb;
 assign invtlb_op      = es_invtlb_op;
 
 //exp 19
-wire csr_crmd_da;
-wire csr_crmd_pg;
-wire [1:0] csr_crmd_plv;
+assign mmu_en ={{1'b0},{es_need_mem}};
 
-assign csr_crmd_da = csr_crmd_rvalue[`CSR_CRMD_DA];
-assign csr_crmd_pg = csr_crmd_rvalue[`CSR_CRMD_PG];
-assign csr_crmd_plv = csr_crmd_rvalue[`CSR_CRMD_PLV];
-
-wire        direct; //direct addr translation
-wire        dmw_hit0  ;
-wire        dmw_hit1  ;
-wire [31:0] dmw_paddr0;
-wire [31:0] dmw_paddr1;
-wire [31:0] tlb_paddr ;
-wire        tlb_trans;
-wire        ecode_pil ; //load Action Page Invalid Exception
-wire        ecode_pis ; //Store Operation Page Invalid Exception
-wire        ecode_pif ;//Invalid Finger Fetching Page Exception
-wire        ecode_pme ;//Page modification exceptions
-wire        ecode_ppi ;//Page Privilege Level Noncompliance Exception
-wire        ecode_tlbr;//TLB Refill Exception
-
-assign direct = csr_crmd_da & ~ csr_crmd_pg;
-
-assign dmw_hit0 = csr_dmw0_rvalue[csr_crmd_plv] && (csr_dmw0_rvalue[31:29] == es_alu_result[31:29]);
-assign dmw_hit1 = csr_dmw1_rvalue[csr_crmd_plv] && (csr_dmw1_rvalue[31:29] == es_alu_result[31:29]);
-assign dmw_paddr0 = {csr_dmw0_rvalue[27:25], es_alu_result[28:0]};
-assign dmw_paddr1 = {csr_dmw1_rvalue[27:25], es_alu_result[28:0]}; 
-
-assign tlb_trans = ~dmw_hit0 & ~dmw_hit1 & ~direct;
-
-wire [5:0] es_exc_ecode;
-assign ecode_pif = 1'b0 ;
-assign ecode_ppi = tlb_trans & (csr_crmd_plv > s1_plv);
-assign ecode_tlbr = tlb_trans & ~s1_found;
-assign ecode_pil = tlb_trans & ~s1_v & es_res_from_mem;
-assign ecode_pis = tlb_trans & ~s1_v & es_mem_we;
-assign ecode_pme = tlb_trans & ~s1_d & es_mem_we;
-assign es_exc_ecode = direct ? 6'b0 :  {ecode_pil, ecode_pis, ecode_pif, ecode_pme, ecode_ppi, ecode_tlbr} & {6{es_need_mem}}; //only check tlb error when it is ld or store
-
-assign tlb_paddr = (s1_ps == 6'd12) ? {s1_ppn[19:0], es_alu_result[11:0]} : {s1_ppn[19:10], es_alu_result[21:0]};
-
-assign data_sram_addr = direct ? es_alu_result
-                      : dmw_hit0 ? dmw_paddr0
-                      : dmw_hit1 ? dmw_paddr1
-                      : tlb_paddr;
-
-
+wire    ecode_pil;
+wire    ecode_pis;
+wire    ecode_pme;
+assign  ecode_pil       = es_exc_ecode[5] & es_res_from_mem;
+assign  ecode_pis       = es_exc_ecode[4] & es_mem_we;
+assign  ecode_pme       = es_exc_ecode[2] & es_mem_we;
+assign  es_tlb_ecode    = {ecode_pil,ecode_pis,es_exc_ecode[3],ecode_pme,es_exc_ecode[1],es_exc_ecode[0]} & {6{es_need_mem}}; //only check tlb error when it is ld or store
+assign  va              = es_alu_result;
+assign  data_sram_addr  = pa;
 
 endmodule

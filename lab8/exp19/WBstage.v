@@ -14,34 +14,20 @@ module WBstage (
 
     // interface with CSR
     output wire [`WS2CSR_BUS_LEN-1 : 0] ws2csr_bus    ,
-    input  wire [31:0] csr_rvalue,
+    input  wire [31:0]                  csr_rvalue,
 
     // to previous stages
     output wire                         ws_ex         ,
     output wire                         ws_ertn_flush ,
     output wire                         ws_reflush    ,
 
-
-    // exp18
-    input  wire  [ 3:0] csr_tlbidx_index,       // from csr
-    // tlbrd
-    output wire         tlbrd_we,               // to csr
-    output wire  [ 3:0] r_index,                // to tlb
-    // tlbwr and tlbfill, to tlb
-    output wire  [ 3:0] w_index,                // to tlb
-    output wire         we,                     // to tlb
-    // tlbsrch, to csr
-    output wire         tlbsrch_we,             // to csr
-    output wire         tlbsrch_hit,            // to csr
-    output wire  [ 3:0] tlbsrch_hit_index,      // to csr
-
-    output wire                         ws_csr_tlbrd,// to EXE
-
     // debug signal
     output wire [31:0]                  debug_wb_pc       ,
     output wire [3:0]                   debug_wb_rf_we    ,
     output wire [4:0]                   debug_wb_rf_wnum  ,
-    output wire [31:0]                  debug_wb_rf_wdata
+    output wire [31:0]                  debug_wb_rf_wdata ,
+    
+    output wire                         ws_csr_tlbrd
 
 );
 
@@ -91,7 +77,7 @@ assign {
         ws_ecode,
         ws_csr_re       
       }  = ws_exc_data & {`MS_EXC_DATA_WD {ws_valid}};    // wb_ex=inst_syscall, ertn_flush=inst_ertn
-//TODO:Packaging wb-level to csr-level interaction pathways about TLBs
+
 
 wire rf_we;
 wire [4:0] rf_waddr;
@@ -113,7 +99,16 @@ wire  [ 7:0] ws_hw_int_in;
 wire [31: 0] ws_wrong_addr;
 //exp 18
 wire [3:0]  ws_csr_op;
-assign ws2csr_bus = {
+//exp 19
+wire [ 1:0] tlbwe_op;
+wire [19: 0]  ws_csr_tlb_ctrl;
+wire tlbsrch_we;
+wire tlbsrch_hit;
+wire [ 3:0] tlbsrch_hit_index;
+//TODO:Packaging wb-level to csr-level interaction pathways about TLBs
+assign ws_csr_tlb_ctrl = {tlbrd_we, tlbwe_op, tlbsrch_we, tlbsrch_hit, tlbsrch_hit_index};
+
+assign ws2csr_bus = {ws_csr_tlb_ctrl,
                      ws_exc_ecode[0],
                      ws_csr_re, 
                      ws_csr_we, 
@@ -163,11 +158,6 @@ always @(posedge clk) begin
 end
 
 
-
-
-
-
-
 assign ws_csr_wvalue = ws_rkd_value;
 assign ws_reflush = ws_ertn_flush | ws_ex | ws_refetch_flg & ws_valid;
 
@@ -175,23 +165,14 @@ assign rf_we = ws_gr_we && ws_valid && ~ws_ex;
 assign rf_waddr = ws_dest;
 assign rf_wdata = ws_csr_re ? csr_rvalue : ws_final_result;
 
-// exp18
-reg  [ 3:0] rand_idx;
-always @ (posedge clk) begin
-    if (reset) begin
-        rand_idx <= 4'b0;
-    end else begin
-        rand_idx <= {rand_idx[1:0], 2'b0} + 4'd8; // 4*rand_idx+8 mod 16
-    end
-end
-
+//exp18
+wire tlbrd_we;
 // tlbrd
 assign tlbrd_we = ws_inst_tlbrd;
-assign r_index  = csr_tlbidx_index;
 
 // tlbwr and tlbfill
-assign w_index = ws_inst_tlbwr ? csr_tlbidx_index : rand_idx;
-assign we      = ws_inst_tlbwr | ws_inst_tlbfill;
+assign tlbwe_op[0] = ws_inst_tlbwr;
+assign tlbwe_op[1] = ws_inst_tlbfill;
 
 // tlbsrch
 assign tlbsrch_we         = ws_inst_tlbsrch;
@@ -201,8 +182,6 @@ assign tlbsrch_hit_index  = ws_tlbsrch_hit_index;
 
 assign ws_csr_tlbrd = ( ( ws_csr_num == `CSR_ASID || ws_csr_num == `CSR_TLBEHI) && (ws_csr_we)
                      || ws_inst_tlbrd) && ws_valid;
-
-
 
 assign debug_wb_pc = ws_pc;
 assign debug_wb_rf_we = {4{rf_we}};

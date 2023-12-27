@@ -19,15 +19,15 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-//booth乘法器顶层模块
+
 module booth_multiplier(
     input clk,
-    input  [33:0] x, //被乘数
-    input  [33:0] y, //乘数
-    output reg [67:0] z  //乘积
+    input  [33:0] x, 
+    input  [33:0] y,
+    output reg [67:0] z  
 );
 
-//生成部分积（partial product generator, ppg）
+
 wire [67:0] ppg_p [16:0];
 wire [16:0] ppg_c;
 
@@ -43,7 +43,7 @@ generate
     end
 endgenerate
 
-//华莱士树（wallace tree, wt）
+
 wire [14:0] wt_cio [68:0];
 wire [67:0] wt_c;
 wire [67:0] wt_s;
@@ -75,20 +75,20 @@ wire [67:0] z_temp;
 always@ (posedge clk) begin
     z <= z_temp;
 end
-//64位加法器
+
 assign z_temp = {wt_c[66:0], ppg_c[15]} + wt_s[67:0] + ppg_c[16];
 
 endmodule
 
 
-//部分积生成模块
+
 module partial_product_generator #(
     parameter XWIDTH = 68
 )(
-    input  [XWIDTH-1:0] x, //被乘数
-    input  [       2:0] y, //y_{i+1}, y_{i}, y_{i-1}
-    output [XWIDTH-1:0] p, //部分积
-    output              c  //进位
+    input  [XWIDTH-1:0] x, 
+    input  [       2:0] y,
+    output [XWIDTH-1:0] p, 
+    output              c  
 );
 
 wire sn;
@@ -114,13 +114,13 @@ assign c = sn | sn2;
 endmodule
 
 
-//一比特全加器模块
+
 module one_bit_adder(
-    input  a,   //加数
-    input  b,   //被加数
-    input  c,   //进位输入
-    output s,   //和
-    output cout //进位输出
+    input  a,   
+    input  b,  
+    input  c,   
+    output s,   
+    output cout 
 );
 
 assign s = ~(~(a&~b&~c) & ~(~a&b&~c) & ~(~a&~b&c) & ~(a&b&c));
@@ -129,13 +129,13 @@ assign cout = a&b | a&c | b&c;
 endmodule
 
 
-//华莱士树模块
+
 module wallace_tree(
-    input  [16:0] n,    //加数
-    input  [14:0] cin,  //进位传递输入
-    output [14:0] cout, //进位传递输出
-    output        c,    //进位输出
-    output        s     //和
+    input  [16:0] n,    
+    input  [14:0] cin,  
+    output [14:0] cout, 
+    output        c,   
+    output        s   
 );
 
 wire [15:0] adder_a;

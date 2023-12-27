@@ -1,5 +1,5 @@
 `ifndef CSR 
-    `define WS2CSR_BUS_LEN 201
+    `define WS2CSR_BUS_LEN 210
     
     `define EXCEPT_LEN 82
     `define ALU_OP_LEN 19
