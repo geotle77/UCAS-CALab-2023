@@ -1,3 +1,6 @@
+//!!!
+//This is a reference to the official adapter bridge design, which we didn't actually use.
+
 module cpu_axi_interface
 (
     input         clk,

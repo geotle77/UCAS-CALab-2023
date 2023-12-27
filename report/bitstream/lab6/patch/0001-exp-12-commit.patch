@@ -1,0 +1,1168 @@
+From f7b98a6b4cfcd2c727a212bdfe7d90ba8fa923af Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E8=91=A1=E8=90=84=E7=B3=96?= <madifeng21@mails.ucas.ac.cn>
+Date: Mon, 6 Nov 2023 22:08:08 +0800
+Subject: [PATCH] exp 12 commit
+
+---
+ BUS_LEN.vh  |  40 +++++++++-
+ EXEstage.v  |  37 ++++++---
+ IDstage.v   |  99 +++++++++++++++++------
+ IFstage.v   |  26 ++++--
+ MEMstage.v  |  33 ++++++--
+ WBstage.v   |  47 ++++++++---
+ csr.v       | 196 +++++++++++++++++++++++++++++++++++++++++++++
+ div.v       |   8 +-
+ mycpu_top.v | 224 ++++++++++++++++++++++++++++++----------------------
+ 9 files changed, 546 insertions(+), 164 deletions(-)
+ create mode 100644 csr.v
+
+diff --git a/BUS_LEN.vh b/BUS_LEN.vh
+index b9d1987..7746868 100644
+--- a/BUS_LEN.vh
++++ b/BUS_LEN.vh
+@@ -3,10 +3,44 @@
+ 
+     `define FS2DS_BUS_LEN 64  //fs_pc, inst
+     `define FORWARD_BUS_LEN 38
+-    `define DS2ES_BUS_LEN 162 //es_pc, alu_src1, alu_src2, alu_op,load_op,store_op, rkd_value, gr_we, dest, mem_we
+-    `define ES2MS_BUS_LEN 78//ms_pc, mul_op,mem_gr_we, mem_dest, final_result
+-    `define MS2WS_BUS_LEN 70
++    `define DS2ES_BUS_LEN 244 //es_pc, alu_src1, alu_src2, alu_op,load_op,store_op, rkd_value, gr_we, dest, mem_we,except_zip
++    `define ES2MS_BUS_LEN 160//ms_pc, mul_op,mem_gr_we, mem_dest, final_result,except_zip
++    `define MS2WS_BUS_LEN 152
++    `define WS2CSR_BUS_LEN 127
+     
++    `define FORWARD_BUS_LEN 38
++    
++    `define EXCEPT_LEN 82
+     `define ALU_OP_LEN 19
+     `define WB_RF_BUS 38
++    `define BR_BUS 33
++    
++    
++        `define CSR_CRMD   14'h00
++    `define CSR_PRMD   14'h01
++    `define CSR_EUEN   14'h02
++    `define CSR_ECFG   14'h04
++    `define CSR_ESTAT  14'h05
++    `define CSR_ERA    14'h06
++    `define CSR_BADV   14'h07
++    `define CSR_EENTRY 14'h0c
++    `define CSR_SAVE0  14'h30
++    `define CSR_SAVE1  14'h31
++    `define CSR_SAVE2  14'h32
++    `define CSR_SAVE3  14'h33
++    `define CSR_TID    14'h40
++    `define CSR_TCFG   14'h41
++    `define CSR_TVAL   14'h42
++    `define CSR_TICLR  14'h44
++
++    `define CSR_CRMD_PLV    1 :0
++    `define CSR_CRMD_IE     2
++    `define CSR_PRMD_PPLV   1 :0
++    `define CSR_PRMD_PIE    2
++    `define CSR_ECFG_LIE    12:0
++    `define CSR_ESTAT_IS10  1 :0
++    `define CSR_ERA_PC      31:0
++    `define CSR_EENTRY_VA   31:6
++    `define CSR_SAVE_DATA   31:0
++    `define CSR_TID_TID     31:0
+ `endif
+\ No newline at end of file
+diff --git a/EXEstage.v b/EXEstage.v
+index bc4feaa..1e15791 100644
+--- a/EXEstage.v
++++ b/EXEstage.v
+@@ -11,20 +11,23 @@ module EXEstage (
+   
+   input wire [`DS2ES_BUS_LEN-1:0] ds2es_bus,
+   output wire [`ES2MS_BUS_LEN-1:0] es2ms_bus,
++  output wire [`FORWARD_BUS_LEN-1:0]   exe_forward_zip,
+   
+   output wire data_sram_en,
+   output wire [3:0] data_sram_we,
+   output wire [31:0] data_sram_addr,
+   output wire [31:0] data_sram_wdata,
+ 
+-  output wire [`FORWARD_BUS_LEN-1:0]   exe_forward_zip,
+-
+-  output reg es_block,//es_inst_is_ld,
+-  input wire block,//inst_ld_w,
++  output reg es_block,
++  input wire block,
+   
+   input wire res_from_mul,
+   output reg exe_res_from_mul,
+-  output [67:0] mul_result
++  output [67:0] mul_result,
++
++  input wire ms_ex,
++  input wire wb_ex,
++  output wire es_csr_re
+ );
+ 
+ 
+@@ -39,17 +42,19 @@ wire [2:0]  mul_op;
+ wire [31:0] rkd_value;
+ wire gr_we;
+ wire [4:0] dest;
+-assign {ds_pc, alu_src1, alu_src2, alu_op, mul_op,  load_op, store_op, rkd_value, gr_we, dest} = ds2es_bus;
++wire [`EXCEPT_LEN-1 : 0] except_zip;
++assign {ds_pc, alu_src1, alu_src2, alu_op, mul_op,  load_op, store_op, rkd_value, gr_we, dest, except_zip} = ds2es_bus;
+ reg [4:0] exe_dest;
+ wire [31:0] alu_result;
++wire exe_rf_we;
+ assign exe_forward_zip={exe_rf_we, exe_dest, alu_result};
+ reg [31:0] es_pc;
+ wire [4:0] exe_load_op;
+ reg [15:0] alu_op_reg;
+ reg [2:0]  mul_op_reg;
+ reg exe_gr_we;
+-
+-assign es2ms_bus = {es_pc, mul_op_reg, alu_result, exe_load_op, exe_dest, exe_gr_we};
++reg [`EXCEPT_LEN-1 : 0] exe_except_zip;
++assign es2ms_bus = {es_pc, mul_op_reg, alu_result, exe_load_op, exe_dest, exe_gr_we,exe_except_zip};
+ //////////declaration////////
+ 
+ reg es_valid;
+@@ -62,6 +67,8 @@ reg [4:0]  load_op_reg;
+ reg [2:0]  store_op_reg;
+ reg [31:0] rkd_value_reg;
+ 
++wire alu_flag;
++
+ //////////pipeline////////
+ wire es_ready_go;
+ 
+@@ -73,6 +80,9 @@ assign es2ms_valid = es_valid && es_ready_go;
+ always @(posedge clk) begin
+   if (reset) begin
+     es_valid <= 1'b0;
++  end 
++  else if(wb_ex) begin
++    es_valid <= 1'b0;
+   end else if (es_allowin) begin
+     es_valid <= ds2es_valid;
+   end
+@@ -87,8 +97,9 @@ always @(posedge clk) begin
+     store_op_reg <= store_op;
+     rkd_value_reg <= rkd_value;
+     exe_gr_we     <= gr_we;
+-    exe_dest       <= dest;
++    exe_dest          <= dest;
+     exe_res_from_mul <= res_from_mul;
++    exe_except_zip <= except_zip;
+   end
+ end
+ 
+@@ -103,6 +114,12 @@ always @(posedge clk)begin
+     end
+ end
+ //////////assign//////////
++
++
++assign es_csr_re = exe_except_zip[1];
++
++
++
+ alu u_alu(
+     .clk        (clk        ),
+     .resetn     (resetn     ),
+@@ -131,7 +148,7 @@ assign mem_we=(|store_op_reg);
+ assign exe_rf_we = es_valid && exe_gr_we;
+ assign exe_load_op =load_op_reg;
+ assign data_sram_en    =  ((|exe_load_op)|mem_we) & es_valid;//1'b1;
+-assign data_sram_we    =  mem_we? st_strb : 4'b0;
++assign data_sram_we    =  {4{es_valid & ~wb_ex & ~ms_ex}} & mem_we ? st_strb : 4'b0;
+ assign data_sram_addr  =  alu_result;
+ assign data_sram_wdata =  st_data;
+ //mul_src
+diff --git a/IDstage.v b/IDstage.v
+index dad35be..768d099 100644
+--- a/IDstage.v
++++ b/IDstage.v
+@@ -8,7 +8,7 @@ module IDstage (
+   input wire fs2ds_valid,
+   output wire ds2es_valid,
+   //branch  control signals
+-  output wire [32:0] br_zip,
++  output wire [`BR_BUS-1:0] br_zip,
+   input wire [`WB_RF_BUS-1:0] rf_zip,
+   output wire[`DS2ES_BUS_LEN-1:0] ds2es_bus,
+   input wire [`FS2DS_BUS_LEN-1:0] fs2ds_bus,
+@@ -19,7 +19,13 @@ module IDstage (
+   input wire es_block,
+   output wire block,
+   
+-  output wire res_from_mul
++  output wire res_from_mul,
++  
++  input wire ms_ex,
++  input wire wb_ex,
++  
++  input wire es_csr_re,
++  input wire ms_csr_re
+ );
+ 
+ //////////zip//////////
+@@ -56,7 +62,10 @@ wire [31:0] rkd_value;
+ wire gr_we;
+ wire [4:0] dest;
+ wire mem_we;
+-assign ds2es_bus = {ds_pc, alu_src1, alu_src2, alu_op, mul_op, load_op, store_op, rkd_value, gr_we, dest};
++wire [`EXCEPT_LEN-1 : 0] ds_except_zip;
++wire [4:0] load_op;
++wire [2:0] store_op;
++assign ds2es_bus = {ds_pc, alu_src1, alu_src2, alu_op, mul_op, load_op, store_op, rkd_value, gr_we, dest, ds_except_zip/*82bits*/};
+ 
+ //////////declaration////////
+ reg ds_valid;
+@@ -66,8 +75,8 @@ reg ds_valid;
+ // wire [31:0] br_target;
+ 
+ // wire [11:0] alu_op;
+-wire [4:0] load_op;
+-wire [2:0] store_op;
++//wire [4:0] load_op;
++//wire [2:0] store_op;
+ wire src1_is_pc;
+ wire src2_is_imm;
+ wire dst_is_r1;
+@@ -115,7 +124,7 @@ wire inst_slli_w;
+ wire inst_srli_w;
+ wire inst_srai_w;
+ wire inst_addi_w;
+-//wire inst_ld_w;
++wire inst_ld_w;
+ wire inst_st_w;
+ wire inst_jirl;
+ wire inst_b;
+@@ -135,21 +144,30 @@ wire inst_sltui;
+ wire inst_slti;
+ wire inst_andi;
+ wire inst_ori;
++wire inst_xori;
+ wire inst_sll_w;
+ wire inst_srl_w;
+ wire inst_sra_w;
+ wire inst_pcaddu12i;
+ 
+-wire        inst_blt;
+-wire        inst_bge;
+-wire        inst_bltu;
+-wire        inst_bgeu;
+-wire        inst_ld_b;
+-wire        inst_ld_h;
+-wire        inst_ld_bu;
+-wire        inst_ld_hu;
+-wire        inst_st_b;
+-wire        inst_st_h;
++wire inst_blt;
++wire inst_bge;
++wire inst_bltu;
++wire inst_bgeu;
++wire inst_ld_b;
++wire inst_ld_h;
++wire inst_ld_bu;
++wire inst_ld_hu;
++wire inst_st_b;
++wire inst_st_h;
++
++//系统调用异常支持指令
++wire inst_csrrd;
++wire inst_csrwr;
++wire inst_csrxchg;
++wire inst_ertn;
++wire inst_syscall;
++
+ 
+ wire need_ui5;
+ wire need_ui12;
+@@ -166,25 +184,42 @@ wire [31:0] rf_rdata2;
+ 
+ reg [31:0] inst_reg;
+ 
++wire csr_re;
++wire csr_we;
++wire [31:0] csr_wmask;
++wire [31:0] csr_wvalue;
++wire [13:0] csr_num;
+ 
+ 
+ //////////pipeline//////////
++
+ wire ds_ready_go;
+-assign ds_ready_go    =~(ds_valid && ((exe_rf_we && es_block && 
+-                            (exe_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc & ~inst_lu12i_w & |alu_op |(|mul_op)) ||  //
+-                             exe_dest == rf_raddr2 && |rf_raddr2 && ~src2_is_imm & |alu_op|(|mul_op)))));
++wire exe_conflict_rj;
++wire exe_conflict_rkd;
++wire mem_conflict_rj;
++wire mem_conflict_rkd;
++wire branch;
++
++assign branch = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu;
++assign exe_conflict_rj  = exe_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc  & ~inst_lu12i_w & (|alu_op) | (|mul_op) | csr_re | branch);
++assign exe_conflict_rkd = exe_dest == rf_raddr2 && |rf_raddr2 && (~src2_is_imm &                 (|alu_op) | (|mul_op) | csr_re | branch);
++assign mem_conflict_rj  = mem_dest == rf_raddr1 && |rf_raddr1 && (~src1_is_pc  & ~inst_lu12i_w & (|alu_op) | (|mul_op) | csr_re | branch);
++assign mem_conflict_rkd = mem_dest == rf_raddr2 && |rf_raddr2 && (~src2_is_imm &                 (|alu_op) | (|mul_op) | csr_re | branch);
++
++assign ds_ready_go    = ~(      exe_rf_we && (es_block | es_csr_re) && (exe_conflict_rj || exe_conflict_rkd)    ||
++                                mem_rf_we && (ms_csr_re)            && (mem_conflict_rj || mem_conflict_rkd)        );
+ 
+ 
+ assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin;
+ assign ds2es_valid = ds_valid && ds_ready_go;
+ 
+ always @(posedge clk) begin
+-  if (reset || br_taken) begin
++  if (reset || br_taken || wb_ex) begin
+     ds_valid <= 1'b0;
+   end else if (ds_allowin) begin
+     ds_valid <= fs2ds_valid;
+   end
+-  
++
+   if(fs2ds_valid && ds_allowin)begin
+     ds_pc <= fs_pc;
+     inst_reg <= inst;
+@@ -235,7 +270,7 @@ assign inst_bne    = op_31_26_d[6'h17];
+ assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst_reg[25];
+ 
+ //additional instruction!
+-assign inst_pcaddu12i = op_31_26_d[6'h07] & ~inst[25];
++assign inst_pcaddu12i = op_31_26_d[6'h07] & ~inst_reg[25];
+ 
+ //shift inst
+ assign inst_sll_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0e];
+@@ -269,6 +304,13 @@ assign inst_ld_hu  = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
+ assign inst_st_b   = op_31_26_d[6'h0a] & op_25_22_d[4'h4];
+ assign inst_st_h   = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
+ 
++assign inst_csrrd   = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h00);
++assign inst_csrwr   = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & (rj == 5'h01);
++assign inst_csrxchg = op_31_26_d[6'h01] & (op_25_22[3:2] == 2'b0) & ~inst_csrrd & ~inst_csrwr;
++assign inst_ertn    = op_31_26_d[6'h01] & op_25_22_d[4'h9] & op_21_20_d[2'h0] & op_19_15_d[5'h10] 
++                    & (rk == 5'h0e) & (~|rj) & (~|rd);
++assign inst_syscall = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h16];
++
+ assign load_op[0] = inst_ld_b;
+ assign load_op[1] = inst_ld_h;
+ assign load_op[2] = inst_ld_w;
+@@ -318,7 +360,7 @@ assign br_offs = {32{need_si26}} & {{ 4{i26[25]}}, i26[25:0], 2'b0} |
+ 
+ assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};    
+ 
+-assign src_reg_is_rd = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu | (|store_op );
++assign src_reg_is_rd = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu | (|store_op ) | csr_re;
+ 
+ assign src1_is_pc    = inst_jirl | inst_bl | inst_pcaddu12i;
+ 
+@@ -341,7 +383,7 @@ assign src2_is_imm   = inst_slli_w |
+ assign dst_is_r1     = inst_bl;
+ assign gr_we         = ~inst_st_w & ~inst_st_h & ~inst_st_b & ~inst_beq  & 
+                        ~inst_bne  & ~inst_b    & ~inst_bge  & ~inst_bgeu & 
+-                       ~inst_blt  & ~inst_bltu; 
++                       ~inst_blt  & ~inst_bltu & ~inst_syscall & ~inst_ertn;
+ assign mem_we        = inst_st_w | inst_st_b | inst_st_h;
+ assign dest          = dst_is_r1 ? 5'd1 : rd;
+ 
+@@ -398,4 +440,13 @@ assign alu_src2 = src2_is_imm ? imm : rkd_value;
+ 
+ assign block = (|load_op) || res_from_mul;
+ 
++
++assign csr_re    = inst_csrrd | inst_csrwr | inst_csrxchg;
++assign csr_we    = inst_csrwr | inst_csrxchg;
++assign csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
++assign csr_wvalue   = rkd_value;
++assign csr_num   = inst_reg[23:10];
++
++assign ds_except_zip  = {csr_num, csr_wmask, csr_wvalue, inst_syscall, inst_ertn, csr_re, csr_we};
++
+ endmodule
+\ No newline at end of file
+diff --git a/IFstage.v b/IFstage.v
+index abd878b..b1a7e40 100644
+--- a/IFstage.v
++++ b/IFstage.v
+@@ -2,20 +2,25 @@
+ module IFstage (
+   input  wire clk,
+   input  wire resetn,
+-  //the bus from the IDstage
+-  input  wire [32:0] br_zip,
+-  //the interface with the SRA
++  //the interface with the SRAM
+   output wire inst_sram_en,
+   output wire [3:0] inst_sram_we,
+   output wire [31:0] inst_sram_addr,
+   output wire [31:0] inst_sram_wdata,
+   input  wire [31:0] inst_sram_rdata,
+   //the interface between the IFstage and the IDstage  
++  input  wire [`BR_BUS-1:0] br_zip,
+   output wire [`FS2DS_BUS_LEN-1:0] fs2ds_bus,
+-  output reg  fs_valid,
+   input  wire ds_allowin,
+-  output wire fs2ds_valid
++  output wire fs2ds_valid,
++
++  input wire wb_ex,
++  input wire ertn_flush,
++  input wire [31:0] ex_entry,
++  input wire [31:0] ertn_entry
+ );
++
++
+ //////////declaration//////////
+ wire [31:0] seq_pc;
+ wire [31:0] nextpc;
+@@ -26,15 +31,20 @@ wire [31:0] br_target;
+ 
+ wire [31:0] fs_pc;
+ wire [31:0] inst;
++
++
+ //////////zip//////////
+ assign {br_taken, br_target} = br_zip;
+ assign fs2ds_bus = {fs_pc, inst};
++
++
+ //////////pipeline////////
+ wire fs_ready_go; 
+ wire fs_allowin; 
++reg fs_valid;
+ 
+ assign fs_ready_go = 1'b1;
+-assign fs_allowin = ~fs_valid || fs_ready_go && ds_allowin;
++assign fs_allowin = ~fs_valid || fs_ready_go && ds_allowin || ertn_flush || wb_ex;
+ assign fs2ds_valid = fs_valid && fs_ready_go;
+ 
+ assign fs_pc = pc;
+@@ -58,7 +68,9 @@ end
+ //////////assign//////////
+ 
+ assign seq_pc = pc + 3'h4;
+-assign nextpc = br_taken ? br_target : seq_pc;
++assign nextpc  =  wb_ex? ex_entry:
++                  ertn_flush? ertn_entry:
++                  br_taken ? br_target : seq_pc;
+ 
+ assign inst_sram_en = resetn && fs_allowin;
+ assign inst_sram_we = 4'b0;
+diff --git a/MEMstage.v b/MEMstage.v
+index 93ee338..5bc9df6 100644
+--- a/MEMstage.v
++++ b/MEMstage.v
+@@ -1,3 +1,4 @@
++`include "BUS_LEN.vh"
+ module MEMstage (
+   input wire clk,
+   input wire resetn,
+@@ -11,10 +12,14 @@ module MEMstage (
+   
+   input wire [`ES2MS_BUS_LEN-1:0] es2ms_bus,
+   output wire [`MS2WS_BUS_LEN-1:0] ms2ws_bus,
+-
+   output wire [`FORWARD_BUS_LEN-1:0] mem_forward_zip,
++  
+   input wire exe_res_from_mul,
+-  input [67:0] mul_result
++  input [67:0] mul_result,
++
++  output wire ms_ex,
++  input wire wb_ex,
++  output wire ms_csr_re
+ );
+ 
+ 
+@@ -25,11 +30,8 @@ wire [4:0] exe_dest;
+ wire [4:0]load_op;
+ wire [2:0]mul_op;
+ wire exe_gr_we;
+-assign {es_pc, mul_op, alu_result, load_op, exe_dest, exe_gr_we} = es2ms_bus;
+-
+-reg [31:0] ms_pc;
+-reg mem_gr_we;
+-assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result};
++wire [`EXCEPT_LEN-1 : 0] except_zip;
++assign {es_pc, mul_op, alu_result, load_op, exe_dest, exe_gr_we ,except_zip} = es2ms_bus;
+ 
+ wire mem_rf_we;
+ reg [4:0] mem_dest_reg;
+@@ -37,6 +39,11 @@ wire[4:0] mem_dest;
+ wire [31:0] final_result;
+ assign mem_dest=mem_dest_reg;
+ assign mem_forward_zip = {mem_rf_we, mem_dest, final_result};
++
++reg [31:0] ms_pc;
++reg mem_gr_we;
++reg [`EXCEPT_LEN-1 : 0] mem_except_zip;
++assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result, mem_except_zip};
+ //////////declaration//////////
+ 
+ reg [18:0] mem_alu_op;
+@@ -58,11 +65,16 @@ wire ms_ready_go;
+ assign ms_ready_go = 1'b1;
+ assign ms_allowin = ~ms_valid || ms_ready_go && ws_allowin;
+ assign ms2ws_valid = ms_valid && ms_ready_go;
++assign ms_ex = mem_except_zip[3] | mem_except_zip[2]; 
+ 
+ always @(posedge clk) begin
+   if (reset) begin
+     ms_valid <= 1'b0;
+-  end else if (ms_allowin) begin
++  end 
++  if (wb_ex) begin
++    ms_valid <= 1'b0;
++  end
++  else if (ms_allowin) begin
+     ms_valid <= es2ms_valid;
+   end
+  
+@@ -74,10 +86,15 @@ always @(posedge clk) begin
+     mem_dest_reg <= exe_dest;
+     mem_gr_we <= exe_gr_we;
+     res_from_mul_reg <= exe_res_from_mul;
++    mem_except_zip <= except_zip;
+   end
+ end
+ 
+ 
++assign ms_csr_re = mem_except_zip[1];
++
++assign ms_ex = mem_except_zip[3] | mem_except_zip[2];
++
+ assign mem_rf_we = ms_valid && mem_gr_we;
+ assign mem_res_from_mem = (|mem_load_op);
+ 
+diff --git a/WBstage.v b/WBstage.v
+index a318329..052bc96 100644
+--- a/WBstage.v
++++ b/WBstage.v
+@@ -1,23 +1,24 @@
++`include "BUS_LEN.vh"
+ module WBstage (
+   input wire clk,
+   input wire resetn,
+   input wire reset,
+   
+-  input wire ms_allowin,
+   output wire ws_allowin,
+-  input wire es2ms_valid,
+-  output wire ms2ws_valid,
++  input wire ms2ws_valid,
+   
+   input wire [`MS2WS_BUS_LEN-1:0] ms2ws_bus,  
+-  output wire [`MS2WS_BUS_LEN-1:0] rf_zip,
++  output wire [`WB_RF_BUS-1:0] rf_zip,
++  output wire [`WS2CSR_BUS_LEN-1 : 0] ws2csr_bus,
+ 
+   output wire [31:0] debug_wb_pc,
+   output wire [3:0] debug_wb_rf_we,
+   output wire [4:0] debug_wb_rf_wnum,
+   output wire [31:0] debug_wb_rf_wdata,
+-
+-  output reg ws_valid,
+-  output reg gr_we_reg
++  
++  output wire ertn_flush,
++  output wire wb_ex,
++  input  wire [31:0] csr_rvalue
+ );
+ 
+ //////////zip//////////
+@@ -31,12 +32,24 @@ wire mem_gr_we;
+ wire [4:0] mem_dest;
+ reg  [4:0] dest_reg;
+ wire [31:0] final_result;
+-assign {ms_pc, mem_gr_we, mem_dest, final_result} = ms2ws_bus;
++wire [`EXCEPT_LEN-1 : 0] except_zip;
++assign {ms_pc, mem_gr_we, mem_dest, final_result, except_zip} = ms2ws_bus;
++
++wire csr_re;
++wire csr_we;
++wire [13:0] csr_num;
++wire [31:0] csr_wmask;
++wire [31:0] csr_wvalue;
++reg  [31:0] ws_pc;
++wire [ 5:0] wb_ecode;
++wire [ 8:0] wb_esubcode;
++assign ws2csr_bus = {csr_re, csr_we, csr_num, csr_wmask, csr_wvalue, ws_pc, wb_ecode, wb_esubcode};
+ 
+ //////////declaration////////
+-reg [31:0] ws_pc;
++reg ws_valid;
+ reg [31:0] final_result_reg;
+-
++reg gr_we_reg;
++reg [`EXCEPT_LEN-1 : 0] wb_except_zip;
+ //////////pipeline//////////
+ wire ws_ready_go;
+ 
+@@ -47,7 +60,11 @@ assign ws_allowin = ~ws_valid || ws_ready_go;
+ always @(posedge clk) begin
+   if (reset) begin
+     ws_valid <= 1'b0;
+-  end else if (ws_allowin) begin
++  end 
++  else if (wb_ex | ertn_flush) begin
++    ws_valid <= 1'b0;
++  end
++  else if (ws_allowin) begin
+     ws_valid <= ms2ws_valid;
+   end
+   
+@@ -56,17 +73,21 @@ always @(posedge clk) begin
+     gr_we_reg <= mem_gr_we;
+     dest_reg <= mem_dest;
+     final_result_reg <= final_result;
++    wb_except_zip <= except_zip;
+   end
+ end
+ 
++assign {csr_num, csr_wmask, csr_wvalue, wb_ex, ertn_flush, csr_re, csr_we} = wb_except_zip & {82{ws_valid}};    // wb_ex=inst_syscall, ertn_flush=inst_ertn
++assign wb_ecode = {6{wb_ex}} & 6'hb;
++assign wb_esubcode = 9'b0;
+ //////////assign//////////
+ assign rf_we = gr_we_reg && ws_valid;
+ assign rf_waddr = dest_reg;
+-assign rf_wdata = final_result_reg;
++assign rf_wdata = csr_re ? csr_rvalue : final_result_reg;
+ 
+ assign debug_wb_pc = ws_pc;
+ assign debug_wb_rf_we = {4{rf_we}};
+ assign debug_wb_rf_wnum = dest_reg;
+-assign debug_wb_rf_wdata = final_result_reg;
++assign debug_wb_rf_wdata = csr_re ? csr_rvalue : final_result_reg;
+ 
+ endmodule
+diff --git a/csr.v b/csr.v
+new file mode 100644
+index 0000000..2ebae64
+--- /dev/null
++++ b/csr.v
+@@ -0,0 +1,196 @@
++`include "BUS_LEN.vh"
++module csr(
++    input  wire          clk       ,
++    input  wire          reset     ,
++
++    output wire [31:0]   csr_rvalue,
++    output wire [31:0]   ex_entry  ,
++    output wire [31:0]   ertn_entry,
++
++    input  wire          ertn_flush,
++    input  wire          wb_ex     ,
++    input wire [`WS2CSR_BUS_LEN-1 : 0] ws2csr_bus
++);
++    
++    wire csr_re;
++    wire csr_we;
++    wire [13:0] csr_num;
++    wire [31:0] csr_wmask;
++    wire [31:0] csr_wvalue;
++    wire  [31:0] ws_pc;
++    wire [ 5:0] wb_ecode;
++    wire [ 8:0] wb_esubcode;
++    assign {csr_re, csr_we, csr_num, csr_wmask, csr_wvalue, ws_pc, wb_ecode, wb_esubcode} = ws2csr_bus;
++
++
++
++    // 当前模式信息
++    wire [31: 0] csr_crmd_data;
++    reg  [ 1: 0] csr_crmd_plv;      //CRMD的PLV域，当前特权等级
++    reg          csr_crmd_ie;       //CRMD的全�?中断使能信号
++    reg          csr_crmd_da;       //CRMD的直接地�?翻译使能
++    reg          csr_crmd_pg;
++    reg  [ 6: 5] csr_crmd_datf;
++    reg  [ 8: 7] csr_crmd_datm;
++
++    // 例外前模式信�?
++    wire [31: 0] csr_prmd_data;
++    reg  [ 1: 0] csr_prmd_pplv;     //CRMD的PLV域旧�?
++    reg          csr_prmd_pie;      //CRMD的IE域旧�?
++
++    // 例外状�??
++    wire [31: 0] csr_estat_data;    // 保留�?15:13, 31
++    reg  [12: 0] csr_estat_is;      // 例外中断的状态位�?8个硬件中�?+1个定时器中断+1个核间中�?+2个软件中断）
++    reg  [ 5: 0] csr_estat_ecode;   // 例外类型�?级编�?
++    reg  [ 8: 0] csr_estat_esubcode;// 例外类型二级编码
++
++    // 例外返回地址ERA
++    reg  [31: 0] csr_era_data;  // data
++
++    // 例外入口地址eentry
++    wire [31: 0] csr_eentry_data;   // 保留�?5:0
++    reg  [25: 0] csr_eentry_va;     // 例外中断入口高位地址
++    // 出错虚地�?
++    reg  [31: 0] csr_save0_data;
++    reg  [31: 0] csr_save1_data;
++    reg  [31: 0] csr_save2_data;
++    reg  [31: 0] csr_save3_data;
++
++    assign ex_entry = csr_eentry_data;
++    assign ertn_entry = csr_era_data;
++
++
++
++
++
++
++
++    // CRMD的PLV、IE域：考虑复位、例外�?�例外返回和�?
++    always @(posedge clk) begin
++        if (reset) begin
++            csr_crmd_plv <= 2'b0;
++            csr_crmd_ie  <= 1'b0;
++        end
++        else if (wb_ex) begin
++            csr_crmd_plv <= 2'b0;
++            csr_crmd_ie  <= 1'b0;
++        end
++        else if (ertn_flush) begin
++            csr_crmd_plv <= csr_prmd_pplv;
++            csr_crmd_ie  <= csr_prmd_pie;
++        end
++        else if (csr_we && csr_num == `CSR_CRMD) begin
++            csr_crmd_plv <= csr_wmask[`CSR_CRMD_PLV] & csr_wvalue[`CSR_CRMD_PLV]
++                          | ~csr_wmask[`CSR_CRMD_PLV] & csr_crmd_plv;
++            csr_crmd_ie  <= csr_wmask[`CSR_CRMD_IE ] & csr_wvalue[`CSR_CRMD_IE ]
++                          | ~csr_wmask[`CSR_CRMD_IE ] & csr_crmd_ie;
++        end
++    end
++
++    // CRMD的DA、PG、DATF、DATM域：考虑复位和写
++    always @(posedge clk) begin
++        if(reset) begin
++            csr_crmd_da   <= 1'b1;
++            csr_crmd_pg   <= 1'b0;
++            csr_crmd_datf <= 2'b0;
++            csr_crmd_datm <= 2'b0;
++        end
++        else if (csr_we && csr_estat_ecode == 6'h3f) begin
++            csr_crmd_da   <= 1'b0;
++            csr_crmd_pg   <= 1'b1;
++            csr_crmd_datf <= 2'b01;
++            csr_crmd_datm <= 2'b01;            
++        end
++    end
++
++    // PRMD的PPLV、PIE域：考虑例外和写
++    always @(posedge clk) begin
++        if (wb_ex) begin
++            csr_prmd_pplv <= csr_crmd_plv;
++            csr_prmd_pie  <= csr_crmd_ie;
++        end
++        else if (csr_we && csr_num==`CSR_PRMD) begin
++            csr_prmd_pplv <=  csr_wmask[`CSR_PRMD_PPLV] & csr_wvalue[`CSR_PRMD_PPLV]
++                           | ~csr_wmask[`CSR_PRMD_PPLV] & csr_prmd_pplv;
++            csr_prmd_pie  <=  csr_wmask[`CSR_PRMD_PIE ] & csr_wvalue[`CSR_PRMD_PIE ]
++                           | ~csr_wmask[`CSR_PRMD_PIE ] & csr_prmd_pie;
++        end
++    end
++
++    // ESTAT的IS域：考虑复位和写
++    always @(posedge clk) begin
++        if (reset) begin
++            csr_estat_is[1:0] <= 2'b0;
++        end
++        else if (csr_we && (csr_num == `CSR_ESTAT)) begin
++            csr_estat_is[1:0] <= ( csr_wmask[`CSR_ESTAT_IS10] & csr_wvalue[`CSR_ESTAT_IS10])
++                               | (~csr_wmask[`CSR_ESTAT_IS10] & csr_estat_is[1:0]          );
++        end
++
++        csr_estat_is[9:2] <= 8'b0;
++        csr_estat_is[ 10] <= 1'b0;
++        csr_estat_is[ 11] <= 1'b0;
++        csr_estat_is[ 12] <= 1'b0;
++    end    
++
++    // ESTAT的Ecode和EsubCode域：只�?�虑例外
++    always @(posedge clk) begin
++        if (wb_ex) begin
++            csr_estat_ecode    <= wb_ecode;
++            csr_estat_esubcode <= wb_esubcode;
++        end
++    end
++
++    // ERA的PC域：考虑例外和写
++    always @(posedge clk) begin
++        if(wb_ex)
++            csr_era_data <= ws_pc;
++        else if (csr_we && csr_num == `CSR_ERA) 
++            csr_era_data <= csr_wmask[`CSR_ERA_PC] & csr_wvalue[`CSR_ERA_PC]
++                        | ~csr_wmask[`CSR_ERA_PC] & csr_era_data;
++    end
++
++     // EENTRY：只考虑�?
++    always @(posedge clk) begin
++        if (csr_we && (csr_num == `CSR_EENTRY))
++            csr_eentry_va <=   csr_wmask[`CSR_EENTRY_VA] & csr_wvalue[`CSR_EENTRY_VA]
++                            | ~csr_wmask[`CSR_EENTRY_VA] & csr_eentry_va ;
++    end
++
++    // SAVE0~3：只考虑�?
++    always @(posedge clk) begin
++        if (csr_we && csr_num == `CSR_SAVE0) 
++            csr_save0_data <=  csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
++                            | ~csr_wmask[`CSR_SAVE_DATA] & csr_save0_data;
++        if (csr_we && (csr_num == `CSR_SAVE1)) 
++            csr_save1_data <=  csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
++                            | ~csr_wmask[`CSR_SAVE_DATA] & csr_save1_data;
++        if (csr_we && (csr_num == `CSR_SAVE2)) 
++            csr_save2_data <=  csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
++                            | ~csr_wmask[`CSR_SAVE_DATA] & csr_save2_data;
++        if (csr_we && (csr_num == `CSR_SAVE3)) 
++            csr_save3_data <=  csr_wmask[`CSR_SAVE_DATA] & csr_wvalue[`CSR_SAVE_DATA]
++                            | ~csr_wmask[`CSR_SAVE_DATA] & csr_save3_data;
++    end
++
++
++
++
++
++    // CSR读指令的读出数据：用域重新拼接成完整的寄存器内容，�?�过寄存器号选择读回的数�?
++    assign csr_crmd_data  = {23'b0, csr_crmd_datm, csr_crmd_datf, csr_crmd_pg, 
++                            csr_crmd_da, csr_crmd_ie, csr_crmd_plv};
++    assign csr_prmd_data  = {29'b0, csr_prmd_pie, csr_prmd_pplv};
++    assign csr_estat_data = { 1'b0, csr_estat_esubcode, csr_estat_ecode, 3'b0, csr_estat_is};
++    assign csr_eentry_data= {csr_eentry_va, 6'b0};
++
++    assign csr_rvalue = {32{csr_num == `CSR_CRMD  }} & csr_crmd_data
++                      | {32{csr_num == `CSR_PRMD  }} & csr_prmd_data
++                      | {32{csr_num == `CSR_ESTAT }} & csr_estat_data
++                      | {32{csr_num == `CSR_ERA   }} & csr_era_data
++                      | {32{csr_num == `CSR_EENTRY}} & csr_eentry_data
++                      | {32{csr_num == `CSR_SAVE0 }} & csr_save0_data
++                      | {32{csr_num == `CSR_SAVE1 }} & csr_save1_data
++                      | {32{csr_num == `CSR_SAVE2 }} & csr_save2_data
++                      | {32{csr_num == `CSR_SAVE3 }} & csr_save3_data;
++endmodule
+\ No newline at end of file
+diff --git a/div.v b/div.v
+index 7ba7e7c..53e3e9e 100644
+--- a/div.v
++++ b/div.v
+@@ -3,10 +3,10 @@ module DIV(
+     input  wire    resetn,
+     input  wire    div_en,
+     input  wire    sign,
+-    input  wire [31:0] divisor,   //��??��?��???
+-    input  wire [31:0] dividend,   //��?��??��
++    input  wire [31:0] divisor,   
++    input  wire [31:0] dividend,  
+     output wire [63:0] result,
+-    output wire    complete //��?��??????????????��
++    output wire    complete 
+ );
+ 
+     wire [31:0] quotient;
+@@ -64,7 +64,7 @@ module DIV(
+         if(~resetn)
+             remainder_reg <= 33'b0;
+         if(div_en & ~complete) begin
+-            if(~|counter)   //?????��????��????
++            if(~|counter)   
+                 remainder_reg <= {32'b0, divisor_abs[31]};
+             else
+                 remainder_reg <=  (counter[5]&(~|counter[4:0])) ? recover_r : {recover_r, divisor_pad[31 - counter]};
+diff --git a/mycpu_top.v b/mycpu_top.v
+index 0e6d8a7..4bb08bf 100644
+--- a/mycpu_top.v
++++ b/mycpu_top.v
+@@ -2,7 +2,6 @@
+ module mycpu_top (
+   input  wire        clk,
+   input  wire        resetn,
+-  output reg         reset,
+   // inst sram interface
+   output wire        inst_sram_en,
+   output wire [3:0] inst_sram_we,
+@@ -23,20 +22,21 @@ module mycpu_top (
+ );
+ 
+ // reg         reset;
++reg         reset;
+ always @(posedge clk) reset <= ~resetn;
+ 
+-reg         valid;
+-always @(posedge clk) begin
+-    if (~resetn) begin
+-        valid <= 1'b0;
+-    end
+-    else begin
+-        valid <= 1'b1;
+-    end
+-end
++//reg         valid;
++//always @(posedge clk) begin
++//    if (~resetn) begin
++//        valid <= 1'b0;
++//    end
++//    else begin
++//        valid <= 1'b1;
++//    end
++//end
+ 
+ 
+-wire fs_allowin;
++//wire fs_allowin;
+ wire ds_allowin;
+ wire es_allowin;
+ wire ms_allowin;
+@@ -50,132 +50,166 @@ wire [`FORWARD_BUS_LEN-1:0] exe_forward_zip;
+ wire [`FORWARD_BUS_LEN-1:0] mem_forward_zip;
+ 
+ 
+-wire mem_rf_we;
+-wire [4:0] mem_dest;
+-wire exe_rf_we;
+-wire [4:0] exe_dest;
+-wire [31:0] alu_result;
+-wire [31:0] final_result;
+-
+ wire res_from_mul;
+ wire exe_res_from_mul;
+-wire es_block;//es_inst_is_ld_w;
+-wire block;//inst_ld_w;
++wire es_block;
++wire block;
+ 
+-wire [32:0] br_zip;
+-wire [37:0] rf_zip;
++wire [`BR_BUS-1:0] br_zip;
++wire [`WB_RF_BUS-1:0] rf_zip;
+ 
+ wire [`FS2DS_BUS_LEN-1:0]   fs2ds_bus;
+ wire [`DS2ES_BUS_LEN-1:0]   ds2es_bus;
+ wire [`ES2MS_BUS_LEN-1:0]   es2ms_bus;
+ wire [`MS2WS_BUS_LEN-1:0]   ms2ws_bus;
++wire [`WS2CSR_BUS_LEN-1 : 0] ws2csr_bus;
+ 
+ wire [67:0] mul_result;
+ 
++wire [31:0] csr_rvalue;
++wire [31:0] ex_entry;
++wire [31:0] ertn_entry;
++wire        ertn_flush;
++wire        ms_ex;
++wire        wb_ex;
++
++wire ms_csr_re;
++wire es_csr_re;
++
+ IFstage my_if (
+-  .clk(clk),
+-  .resetn(resetn),
++  .clk              (clk),
++  .resetn           (resetn),
+   
+-  .ds_allowin(ds_allowin),
+-  .fs2ds_valid(fs2ds_valid),
++  .ds_allowin       (ds_allowin),
++  .fs2ds_valid      (fs2ds_valid),
+   
+-  .inst_sram_en(inst_sram_en),
+-  .inst_sram_we(inst_sram_we),
+-  .inst_sram_addr(inst_sram_addr),
+-  .inst_sram_wdata(inst_sram_wdata),
+-  .inst_sram_rdata(inst_sram_rdata),
++  .inst_sram_en     (inst_sram_en),
++  .inst_sram_we     (inst_sram_we),
++  .inst_sram_addr   (inst_sram_addr),
++  .inst_sram_wdata  (inst_sram_wdata),
++  .inst_sram_rdata  (inst_sram_rdata),
+   
+-  .br_zip(br_zip),
+-  .fs2ds_bus(fs2ds_bus)
++  .br_zip           (br_zip),
++  .fs2ds_bus        (fs2ds_bus),
++
++  .ex_entry         (ex_entry  ),
++  .ertn_entry       (ertn_entry),
++  .ertn_flush       (ertn_flush),
++  .wb_ex            (wb_ex     )
+ );
+ 
+ IDstage my_id (
+-  .clk(clk),
+-  .reset(reset),
++  .clk              (clk),
++  .reset            (reset),
+   
+-  .es_allowin(es_allowin),
+-  .ds_allowin(ds_allowin),
+-  .fs2ds_valid(fs2ds_valid),
+-  .ds2es_valid(ds2es_valid),
+-
+-  .br_zip(br_zip),
+-  .ds2es_bus(ds2es_bus),
+-  .rf_zip(rf_zip),
+-  .fs2ds_bus(fs2ds_bus),
+-
+-  .mem_forward_zip(mem_forward_zip),
+-  .exe_forward_zip(exe_forward_zip),
++  .es_allowin       (es_allowin),
++  .ds_allowin       (ds_allowin),
++  .fs2ds_valid      (fs2ds_valid),
++  .ds2es_valid      (ds2es_valid),
++
++  .br_zip           (br_zip),
++  .ds2es_bus        (ds2es_bus),
++  .rf_zip           (rf_zip),
++  .fs2ds_bus        (fs2ds_bus),
++
++  .mem_forward_zip  (mem_forward_zip),
++  .exe_forward_zip  (exe_forward_zip),
+   
+-  .res_from_mul(res_from_mul),
+-  .es_block(es_block),
+-  .block(block)
++  .res_from_mul     (res_from_mul),
++  .es_block         (es_block),
++  .block            (block),
++
++  .ms_ex            (ms_ex),
++  .wb_ex            (wb_ex | ertn_flush),
++  .ms_csr_re        (ms_csr_re),
++  .es_csr_re        (es_csr_re)
+ );
+ 
+ EXEstage my_exe (
+-  .clk(clk),
+-  .resetn(resetn),
+-  .reset(reset),
++  .clk              (clk),
++  .resetn           (resetn),
++  .reset            (reset),
+   
+-  .ms_allowin(ms_allowin),
+-  .es_allowin(es_allowin),
+-  .ds2es_valid(ds2es_valid),
+-  .es2ms_valid(es2ms_valid),
++  .ms_allowin       (ms_allowin),
++  .es_allowin       (es_allowin),
++  .ds2es_valid      (ds2es_valid),
++  .es2ms_valid      (es2ms_valid),
+   
+-  .ds2es_bus(ds2es_bus),
+-  .es2ms_bus(es2ms_bus),
++  .ds2es_bus        (ds2es_bus),
++  .es2ms_bus        (es2ms_bus),
+ 
+-  .data_sram_en(data_sram_en),
+-  .data_sram_we(data_sram_we),
+-  .data_sram_addr(data_sram_addr),
+-  .data_sram_wdata(data_sram_wdata),
++  .data_sram_en     (data_sram_en),
++  .data_sram_we     (data_sram_we),
++  .data_sram_addr   (data_sram_addr),
++  .data_sram_wdata  (data_sram_wdata),
+ 
+-  .exe_forward_zip(exe_forward_zip),
++  .exe_forward_zip  (exe_forward_zip),
+ 
+-  .res_from_mul(res_from_mul),
+-  .exe_res_from_mul(exe_res_from_mul),
+-  .es_block(es_block),
+-  .block(block),
+-  .mul_result(mul_result)
++  .res_from_mul     (res_from_mul),
++  .exe_res_from_mul (exe_res_from_mul),
++  .es_block         (es_block),
++  .block            (block),
++  .mul_result       (mul_result),
++
++  .ms_ex            (ms_ex),
++  .wb_ex            (wb_ex | ertn_flush),
++  .es_csr_re        (es_csr_re)
+ );
+ 
+ MEMstage my_mem (
+-  .clk(clk),
+-  .resetn(resetn),
+-  .reset(reset),
+-  .data_sram_rdata(data_sram_rdata),
++  .clk              (clk),
++  .resetn           (resetn),
++  .reset            (reset),
++  .data_sram_rdata  (data_sram_rdata),
+   
+-  .ws_allowin(ws_allowin),
+-  .ms_allowin(ms_allowin),
+-  .es2ms_valid(es2ms_valid),
+-  .ms2ws_valid(ms2ws_valid),
++  .ws_allowin       (ws_allowin),
++  .ms_allowin       (ms_allowin),
++  .es2ms_valid      (es2ms_valid),
++  .ms2ws_valid      (ms2ws_valid),
+   
+-  .es2ms_bus(es2ms_bus),
+-  .ms2ws_bus(ms2ws_bus),
++  .es2ms_bus        (es2ms_bus),
++  .ms2ws_bus        (ms2ws_bus),
+   
+-  .exe_res_from_mul(exe_res_from_mul),
+-  .mem_forward_zip( mem_forward_zip),
+-  .mul_result(mul_result)
++  .exe_res_from_mul (exe_res_from_mul),
++  .mem_forward_zip  (mem_forward_zip),
++  .mul_result       (mul_result),
++
++  .ms_ex            (ms_ex),
++  .wb_ex            (wb_ex | ertn_flush),
++  .ms_csr_re        (ms_csr_re)
+ );
+ 
+ WBstage my_wb (
+-  .clk(clk),
+-  .resetn(resetn),
+-  .reset(reset),
++  .clk              (clk),
++  .resetn           (resetn),
++  .reset            (reset),
+   
+-  .ms_allowin(ms_allowin),
+-  .ws_allowin(ws_allowin),
+-  .es2ms_valid(es2ms_valid),
+-  .ms2ws_valid(ms2ws_valid),
++  .ws_allowin       (ws_allowin),
++  .ms2ws_valid      (ms2ws_valid),
+   
+-  .ms2ws_bus(ms2ws_bus),
+-  .rf_zip(rf_zip),
++  .ms2ws_bus        (ms2ws_bus),
++  .rf_zip           (rf_zip),
+ 
+-  .debug_wb_pc(debug_wb_pc),
+-  .debug_wb_rf_we(debug_wb_rf_we),
+-  .debug_wb_rf_wnum(debug_wb_rf_wnum),
++  .debug_wb_pc      (debug_wb_pc),
++  .debug_wb_rf_we   (debug_wb_rf_we),
++  .debug_wb_rf_wnum (debug_wb_rf_wnum),
+   .debug_wb_rf_wdata(debug_wb_rf_wdata),
+ 
+-  .ws_valid(ws_valid)
++  .csr_rvalue       (csr_rvalue),
++  .ertn_flush       (ertn_flush),
++  .wb_ex            (wb_ex),
++  .ws2csr_bus       (ws2csr_bus)
+ );
+ 
++  csr u_csr(
++    .clk            (clk       ),
++    .reset          (reset   ),
++    .csr_rvalue     (csr_rvalue),
++    .ex_entry       (ex_entry  ),
++    .ertn_entry     (ertn_entry),
++    .ertn_flush     (ertn_flush),
++    .wb_ex          (wb_ex     ),
++    .ws2csr_bus     (ws2csr_bus)
++    );
++
+ endmodule
+\ No newline at end of file
+-- 
+2.39.2.windows.1
+

@@ -1,0 +1,483 @@
+From b009f3ccfdfe83f0368bc7608011ccd80ef478cc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E8=91=A1=E8=90=84=E7=B3=96?= <madifeng21@mails.ucas.ac.cn>
+Date: Mon, 11 Dec 2023 19:15:54 +0800
+Subject: [PATCH] exp17 commit
+
+---
+ EXEstage.v        |   2 +-
+ IDstage.v         |   2 +-
+ IFstage.v         |  38 +++++-----
+ transfer_bridge.v | 174 ++++++++++++++++++++++++++++------------------
+ 4 files changed, 131 insertions(+), 85 deletions(-)
+
+diff --git a/EXEstage.v b/EXEstage.v
+index a0bb370..846600a 100644
+--- a/EXEstage.v
++++ b/EXEstage.v
+@@ -237,7 +237,7 @@ assign mem_we=(|es_store_op);
+ assign es_mem_we = mem_we & ~es_reflush & ~ms_ex_to_es & ~st_ale;
+ assign es_rf_we = es_valid && es_gr_we;
+ 
+-assign data_sram_en    =  ~es_finish && es_need_mem;//1'b1;
++assign data_sram_en    =  ~es_finish && es_need_mem && ms_allowin;//1'b1;
+ assign data_sram_size  = (es_store_op[0] | es_load_op[0] | es_load_op[3]) ? 2'b00   // load b, bu or store b
+                        : (es_store_op[1] | es_load_op[1] | es_load_op[4]) ? 2'b01   // load h, hu or store h
+                        : 2'b10;
+diff --git a/IDstage.v b/IDstage.v
+index e234ac8..7a1004c 100644
+--- a/IDstage.v
++++ b/IDstage.v
+@@ -211,7 +211,7 @@ wire [ 1:0] time_op      ;
+ //////////pipeline//////////
+ reg [`FS2DS_BUS_LEN-1: 0] fs2ds_bus_reg;
+ always @(posedge clk) begin
+-    if (reset || br_taken || ds_reflush) begin
++    if (reset || ds_reflush) begin
+       ds_valid <= 1'b0;
+     end else if (ds_allowin) begin
+       ds_valid <= fs2ds_valid;
+diff --git a/IFstage.v b/IFstage.v
+index 1051dab..3daaa90 100644
+--- a/IFstage.v
++++ b/IFstage.v
+@@ -36,7 +36,6 @@ wire br_taken;
+ wire [31:0] br_target;
+ 
+ reg [31: 0] fs_pc;
+-reg [31: 0] pfs_pc;
+ wire [31:0] fs_inst;
+ 
+ wire fs_ready_go; 
+@@ -60,9 +59,9 @@ always @(posedge clk) begin
+ end
+ 
+ assign to_fs_valid = pfs_valid && pfs_ready_go;
+-assign pfs_ready_go = inst_sram_en && inst_sram_addr_ok && ~(pfs_reflush | fs_reflush | br_stall);//the addr is accepted then enter IF stage//my
++assign pfs_ready_go = inst_sram_en && inst_sram_addr_ok && ~(pfs_reflush | fs_reflush | br_taken &~br_stall | br_stall);//the addr is accepted then enter IF stage//my
+ 
+-assign inst_sram_en       = fs_allowin & ~br_stall & pfs_valid & ~pfs_reflush; // consider the case if pfs_valid :1 but fs_allowin :0//my
++assign inst_sram_en       = fs_allowin & pfs_valid & ~pfs_reflush; // consider the case if pfs_valid :1 but fs_allowin :0//my
+ //simple solution : fs_allowin =1 then inst_sram_en =1 to avoid the pfs_ready_go =1 but fs_allowin =0,which can't keep the inst
+ //this method is not good, because it arise more delay
+ assign inst_sram_wr       = 1'b0;
+@@ -117,7 +116,7 @@ assign fs_inst     = fs_inst_valid ? fs_inst_buf : inst_sram_rdata;//don't need
+ assign fs2ds_bus = {fs_exc_data,    //95:64
+                     fs_pc,          //63:32
+                     fs_inst};          //31:0
+-assign fs2ds_valid = fs_valid && fs_ready_go && ~fs_reflush && ~fs_inst_cancel && ~(br_taken & ~br_stall) ;
++assign fs2ds_valid = fs_valid && fs_ready_go && ~fs_inst_cancel ;
+ //////////excption information////////
+ //exp13
+ wire        fs_adef;
+@@ -134,7 +133,8 @@ reg [31: 0]fs_ertn_entry;
+ reg [31: 0]fs_ex_entry;
+ reg fs_br_taken;
+ reg [31: 0] fs_br_target;
+-assign seq_pc = pfs_pc + 3'h4;
++reg fs_br_stall;
++assign seq_pc = fs_pc + 3'h4;
+ assign nextpc  =  wb_ex? csr_ex_entry:   //the nextpc is updated in these cases
+                   fs_ex_valid? fs_ex_entry:
+                   fs_ertn_valid? fs_ertn_entry:
+@@ -170,19 +170,25 @@ always @(posedge clk) begin
+   end
+ end
+ 
++
+ always @(posedge clk) begin
+-  if(~resetn) begin
+-    pfs_pc <= 32'h1bfffffc;
+-  end
+-  else if(pfs_ready_go & fs_allowin) begin//the inst has transfered to the IF stage
+-    pfs_pc <= nextpc;
+-  end
++    if (~resetn) begin
++        fs_br_stall <= 1'b0;
++    end else if (br_stall) begin
++        fs_br_stall <= br_stall;
++    end 
++    else if (inst_sram_addr_ok && ~pfs_reflush && fs_allowin)begin
++        fs_br_stall <= 1'b0;
++    end
+ end
+ 
+ always @(posedge clk) begin
+- if(to_fs_valid & fs_allowin) begin //the inst has been accepted by the IF stage
+-    fs_pc <= nextpc;
+-  end
++    if (~resetn) begin
++        fs_pc <= 32'h1bfffffc;
++    end
++    else if (to_fs_valid & fs_allowin) begin
++        fs_pc <= nextpc;
++    end
+ end
+ 
+ 
+@@ -197,7 +203,7 @@ reg pfs_reflush;
+ always @(posedge clk) begin
+     if(~resetn)
+         pfs_reflush <= 1'b0;
+-    else if(inst_sram_en && fs_reflush)
++    else if(inst_sram_en && (fs_reflush | br_taken &~ br_stall | (br_stall | fs_br_stall)&inst_sram_addr_ok))
+         pfs_reflush <= 1'b1;
+     else if(inst_sram_data_ok)
+         pfs_reflush <= 1'b0;
+@@ -218,7 +224,7 @@ end
+ 
+ 
+ wire fs_inst_cancel;
+-assign fs_inst_cancel = fs_reflush | fs_reflush_reg;
++assign fs_inst_cancel = fs_reflush | fs_reflush_reg | br_taken & ~br_stall | fs_br_taken;
+ 
+ 
+ endmodule
+diff --git a/transfer_bridge.v b/transfer_bridge.v
+index 5023703..28a87f7 100644
+--- a/transfer_bridge.v
++++ b/transfer_bridge.v
+@@ -72,6 +72,15 @@ module transfer_bridge(
+     output wire          data_sram_data_ok
+ );
+ 
++
++
++
++
++
++
++
++
++
+     wire reset;
+     assign reset = ~resetn;
+ 
+@@ -91,7 +100,7 @@ module transfer_bridge(
+     assign arprot   = 3'b0;
+ 
+     // r
+-    assign rready = r_business_cnt_inst != 2'b0 || r_business_cnt_data != 2'b0;
++    assign rready = r_business_cnt_inst != 1'b0 || r_business_cnt_data != 1'b0;
+ 
+     // aw
+     reg [31:0] awaddr_reg;
+@@ -122,24 +131,33 @@ module transfer_bridge(
+     assign bready = bready_reg;
+ 
+ 
+-    parameter READ_REQ_RST          = 5'b00001;
+-    parameter READ_DATA_REQ_START   = 5'b00010;
+-    parameter READ_INST_REQ_START   = 5'b00100;
+-    parameter READ_DATA_REQ_CHECK   = 5'b01000;
+-    parameter READ_REQ_END          = 5'b10000;
+ 
+-    parameter READ_DATA_RST         = 3'b001;
+-    parameter READ_DATA_START       = 3'b010;
+-    parameter READ_DATA_END         = 3'b100;
+ 
+-    parameter WRITE_RST             = 4'b0001;
+-    parameter WRITE_CHECK           = 4'b0010;
+-    parameter WRITE_START           = 4'b0100;
+-    parameter WRITE_END          = 4'b1000;
+ 
+-    parameter WRITE_RSP_RST    = 3'b001;
+-    parameter WRITE_RSP_START  = 3'b010;
+-    parameter WRITE_RSP_END    = 3'b100;
++
++
++
++
++
++    // state machine
++
++    parameter READ_REQ_RST          = 5'b00001; // 1
++    parameter READ_DATA_REQ_START   = 5'b00010; // 2
++    parameter READ_INST_REQ_START   = 5'b00100; // 4
++    parameter READ_DATA_REQ_CHECK   = 5'b01000; // 8
++    parameter READ_REQ_END          = 5'b10000; // 16
++
++    parameter READ_DATA_RST         = 3'b001; // 1
++    parameter READ_DATA_START       = 3'b010; // 2
++    parameter READ_DATA_END         = 3'b100; // 8
++
++    parameter WRITE_RST             = 3'b001; // 1
++    parameter WRITE_START           = 3'b010; // 2
++    parameter WRITE_END             = 3'b100; // 8
++
++    parameter WRITE_RSP_RST         = 3'b001; // 1
++    parameter WRITE_RSP_START       = 3'b010; // 2
++    parameter WRITE_RSP_END         = 3'b100; // 8
+ 
+     reg  [ 4:0] rreq_curr_state;
+     reg  [ 4:0] rreq_next_state;
+@@ -150,11 +168,14 @@ module transfer_bridge(
+     reg  [ 2:0] wrsp_curr_state;
+     reg  [ 2:0] wrsp_next_state;
+ 
+-    reg [1:0] r_business_cnt_inst;
+-    reg [1:0] r_business_cnt_data;
+-    reg [1:0] w_business_cnt;
++    reg r_business_cnt_inst;
++    reg r_business_cnt_data;
++    
++    
++    
++    //--------------------the 1st segment of state machine--------------------
++
+ 
+-    // state machine
+     always @(posedge clk) begin
+         if(reset) begin
+             rreq_curr_state <= READ_REQ_RST;
+@@ -169,9 +190,18 @@ module transfer_bridge(
+             wrsp_curr_state <= wrsp_next_state;
+         end 
+     end
++    
++    
++    
++    
++    
++    //--------------------the 2nd segment of state machine--------------------
+ 
++
++
++    //----------read request----------
++    
+     always @(*) begin
+-        // read request
+         case(rreq_curr_state)
+             READ_REQ_RST: begin
+                 if(data_sram_en & ~data_sram_wr)
+@@ -183,7 +213,7 @@ module transfer_bridge(
+             end
+             
+             READ_DATA_REQ_CHECK: begin
+-                if(bready & block) // wait for write response
++                if(block)
+                     rreq_next_state = rreq_curr_state;
+                 else
+                     rreq_next_state = READ_DATA_REQ_START;
+@@ -204,11 +234,14 @@ module transfer_bridge(
+         endcase
+     end
+ 
++
++
++    //----------read data (response)----------
++
+     always @(*) begin
+-        // read data
+         case(rdata_curr_state)
+             READ_DATA_RST: begin
+-                if((arready && arvalid) || r_business_cnt_inst != 2'b0 || r_business_cnt_data != 2'b0) // exists unaddressed read business
++                if((arready && arvalid) || r_business_cnt_inst != 1'b0 || r_business_cnt_data != 1'b0)
+                     rdata_next_state = READ_DATA_START;
+                 else 
+                     rdata_next_state = rdata_curr_state;
+@@ -225,7 +258,7 @@ module transfer_bridge(
+             READ_DATA_END: begin
+                 if(rvalid & rready)
+                     rdata_next_state = rdata_curr_state;
+-                else if(r_business_cnt_inst != 2'b0 || r_business_cnt_data != 2'b0)
++                else if(r_business_cnt_inst != 1'b0 || r_business_cnt_data != 1'b0)
+                     rdata_next_state = READ_DATA_START;
+                 else
+                     rdata_next_state = READ_DATA_RST;
+@@ -236,24 +269,20 @@ module transfer_bridge(
+         endcase
+         
+     end
++    
++    
++    
++    //----------write request & write data----------
+ 
+     always @(*) begin
+-        // write request & write data
+         case(wrd_curr_state)
+             WRITE_RST: begin
+                 if(data_sram_en && data_sram_wr) 
+-                    wrd_next_state = WRITE_CHECK;
++                    wrd_next_state = WRITE_START;
+                 else 
+                     wrd_next_state = wrd_curr_state;
+             end
+ 
+-            WRITE_CHECK: begin
+-                if(rready && block) //reading data at the same address
+-                    wrd_next_state = wrd_curr_state;
+-                else
+-                    wrd_next_state = WRITE_START;
+-            end
+-
+             WRITE_START: begin
+                 if(wvalid & wready)
+                     wrd_next_state = WRITE_END;
+@@ -269,9 +298,12 @@ module transfer_bridge(
+                 wrd_next_state = WRITE_RST;
+         endcase
+     end
++    
++    
++    
++    //----------write response----------
+ 
+     always @(*) begin
+-         // write response
+         case(wrsp_curr_state)
+             WRITE_RSP_RST: begin
+                 if(wvalid & wready) 
+@@ -290,8 +322,6 @@ module transfer_bridge(
+             WRITE_RSP_END: begin
+                 if(bvalid & bready)
+                     wrsp_next_state = wrsp_curr_state;
+-                else if(wvalid & wready || w_business_cnt != 2'b0)
+-                    wrsp_next_state = WRITE_RSP_START;
+                 else
+                     wrsp_next_state = WRITE_RSP_RST;
+             end
+@@ -300,9 +330,15 @@ module transfer_bridge(
+                 wrsp_next_state = WRITE_RSP_RST;
+         endcase
+     end
+-
+     
+-    // the other AXI signals
++    
++    
++    
++    
++    //--------------------the 3rd segment of state machine--------------------
++    
++    
++    
+     // ar
+     always @(posedge clk) begin
+         if(reset) begin
+@@ -328,7 +364,7 @@ module transfer_bridge(
+     end
+ 
+     always @(posedge clk) begin
+-        if(reset | arready) // until slaver returns arready
++        if(reset | arready)
+             arvalid_reg <= 1'b0;
+         else if(rreq_curr_state == READ_DATA_REQ_START || rreq_curr_state == READ_INST_REQ_START)
+             arvalid_reg <= 1'b1;  
+@@ -358,9 +394,26 @@ module transfer_bridge(
+             awsize_reg <= 3'b0;
+         end
+     end
+-    reg write_transport;
++    
++    // my
++    reg [31:0] awaddr_block;
+     always @(posedge clk) begin
+-        if(reset | awready | write_transport) // until slaver returns awready
++        if(reset)
++            awaddr_block <= 32'b0;
++        else if(awaddr != 32'b0)
++            awaddr_block <= awaddr;
++        else if(bvalid & bready)
++            awaddr_block <= 32'b0;
++    end
++    wire block;
++    assign block = data_sram_addr == awaddr_block && araddr != 32'b0;
++
++            
++            
++    
++    reg write_pending;
++    always @(posedge clk) begin
++        if(reset | awready | write_pending)
+             awvalid_reg <= 1'b0;
+         else if(wrd_curr_state == WRITE_START)
+             awvalid_reg <= 1'b1;
+@@ -368,12 +421,13 @@ module transfer_bridge(
+ 
+     always @(posedge clk) begin
+         if(reset) 
+-            write_transport <= 1'b0;
++            write_pending <= 1'b0;
+         else if(awvalid && awready)
+-            write_transport <= 1'b1;
++            write_pending <= 1'b1;
+         else if(wrd_next_state == WRITE_END)
+-            write_transport <= 1'b0;
++            write_pending <= 1'b0;
+     end
++    
+     //w
+     always @(posedge clk) begin
+         if(reset) begin
+@@ -394,6 +448,7 @@ module transfer_bridge(
+         else 
+             wvalid_reg <= 1'b0;
+     end
++    
+     // b
+     always @(posedge clk) begin
+         if(reset | bvalid) 
+@@ -403,15 +458,13 @@ module transfer_bridge(
+         else 
+             bready_reg <= 1'b0;
+     end
+-    wire block;
+-    assign block = awaddr == araddr && awvalid && arvalid;
+-    
+     
+ 
++
+     always @(posedge clk) begin
+         if(reset) begin
+-            r_business_cnt_inst <= 2'b0;
+-            r_business_cnt_data <= 2'b0;
++            r_business_cnt_inst <= 1'b0;
++            r_business_cnt_data <= 1'b0;
+         end
+         else if(arready & arvalid & rvalid & rready) begin
+             if(~arid[0] && ~rid[0])
+@@ -428,29 +481,19 @@ module transfer_bridge(
+             end
+         end
+         else if(arready & arvalid) begin
+-            if(~arid[0]) 
++            if(~arid[0])
+                 r_business_cnt_inst <= r_business_cnt_inst + 2'b1;
+-            if(arid[0]) 
++            if(arid[0])
+                 r_business_cnt_data <= r_business_cnt_data + 2'b1;
+         end
+         else if (rvalid & rready) begin
+-            if(~rid[0]) 
++            if(~rid[0])
+                 r_business_cnt_inst <= r_business_cnt_inst - 2'b1;
+-            if(rid[0]) 
++            if(rid[0])
+                 r_business_cnt_data <= r_business_cnt_data - 2'b1;
+         end
+     end
+ 
+-    always @(posedge clk) begin
+-        if(reset) 
+-            w_business_cnt <= 2'b0;
+-        else if(bvalid & bready & wvalid & wready) 
+-            w_business_cnt <= w_business_cnt;
+-        else if(wvalid & wready)
+-            w_business_cnt <= w_business_cnt + 2'b1;
+-        else if(bvalid & bready) 
+-            w_business_cnt <= w_business_cnt - 2'b1;
+-    end
+ 
+     
+ 
+@@ -481,6 +524,3 @@ module transfer_bridge(
+ 
+ 
+ endmodule
+-
+-
+-
+-- 
+2.39.2.windows.1
+

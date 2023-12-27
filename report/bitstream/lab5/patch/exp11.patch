@@ -1,0 +1,375 @@
+From f8f02be39452afd8fdcee33def79fc9280b71461 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E8=91=A1=E8=90=84=E7=B3=96?= <madifeng21@mails.ucas.ac.cn>
+Date: Tue, 24 Oct 2023 15:19:45 +0800
+Subject: [PATCH] The exp10 commit!
+
+---
+ EXEstage.v |   4 +-
+ IFstage.v  |   6 ++-
+ MEMstage.v |  86 +++++++++++++++++++++++++++++++++++
+ alu.v      |  31 ++++++++++---
+ div.v      | 128 +++++++++++++++++++++++------------------------------
+ 5 files changed, 171 insertions(+), 84 deletions(-)
+ create mode 100644 MEMstage.v
+
+diff --git a/EXEstage.v b/EXEstage.v
+index 74c787f..a5351ed 100644
+--- a/EXEstage.v
++++ b/EXEstage.v
+@@ -128,7 +128,7 @@ assign data_sram_wdata = rkd_value_reg;
+ //wire  [33:0]  mul_src2;
+ //assign mul_src1 = {{2{alu_src1_reg[31] & ~alu_op_reg[14]}}, alu_src1_reg[31:0]};
+ //assign mul_src2 = {{2{alu_src2_reg[31] & ~alu_op_reg[14]}}, alu_src2_reg[31:0]};
+-
++wire [63:0] result;
+ Wallace_Mul u_mul(
+   .mul_clk(clk),
+   .resetn(resetn),
+@@ -137,6 +137,6 @@ Wallace_Mul u_mul(
+   .B(alu_src2_reg),
+   .result(result)
+ );
+-wire [63:0] result;
++
+ assign mul_result = {4'b0, result};
+ endmodule
+\ No newline at end of file
+diff --git a/IFstage.v b/IFstage.v
+index c726786..b4de390 100644
+--- a/IFstage.v
++++ b/IFstage.v
+@@ -18,6 +18,8 @@ module IFstage (
+   output wire fs2ds_valid
+ );
+ 
++
++
+ //////////declaration//////////
+ reg fs_valid;
+ wire [31:0] seq_pc;
+@@ -33,8 +35,8 @@ assign {br_taken, br_target} = br_zip;
+ assign fs2ds_bus = {fs_pc, inst};
+ 
+ //////////pipeline////////
+-wire fs_ready_go; 
+-wire fs_allowin; 
++wire fs_ready_go; // fs���Խ�������
++wire fs_allowin; // fs���Խ���ָ��
+ 
+ assign fs_ready_go = 1'b1;
+ assign fs_allowin = ~fs_valid || fs_ready_go && ds_allowin;
+diff --git a/MEMstage.v b/MEMstage.v
+new file mode 100644
+index 0000000..ca4be95
+--- /dev/null
++++ b/MEMstage.v
+@@ -0,0 +1,86 @@
++module MEMstage (
++  input wire clk,
++  input wire resetn,
++  input wire reset,
++  input wire [31:0] data_sram_rdata,
++  
++  input wire ws_allowin,
++  output wire ms_allowin,
++  input wire es2ms_valid,
++  output wire ms2ws_valid,
++  
++  input wire [`ES2MS_BUS_LEN-1:0] es2ms_bus,
++  output wire [`MS2WS_BUS_LEN-1:0] ms2ws_bus,
++
++  output wire mem_rf_we,
++  output reg [4:0] mem_dest,
++  output wire [31:0] final_result,
++  
++  input wire exe_res_from_mul,
++  input [67:0] mul_result
++);
++
++
++//////////zip//////////
++wire [31:0] es_pc;
++wire [18:0]es_alu_op;
++wire [31:0] alu_result;
++wire exe_res_from_mem;
++wire [4:0] exe_dest;
++wire exe_gr_we;
++assign {es_pc,es_alu_op, alu_result, exe_res_from_mem, exe_dest, exe_gr_we} = es2ms_bus;
++
++reg [31:0] ms_pc;
++reg mem_gr_we;
++assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, final_result};
++
++
++//////////declaration//////////
++
++reg [18:0] mem_alu_op;
++reg [31:0] mem_alu_result;
++reg mem_res_from_mem;
++wire [31:0]mem_result;
++wire [31:0]mem_mul_result;
++
++reg ms_valid;
++
++reg res_from_mul_reg;
++
++//////////pipeline//////////
++wire ms_ready_go;
++
++assign ms_ready_go = 1'b1;
++assign ms_allowin = ~ms_valid || ms_ready_go && ws_allowin;
++assign ms2ws_valid = ms_valid && ms_ready_go;
++
++always @(posedge clk) begin
++  if (reset) begin
++    ms_valid <= 1'b0;
++  end else if (ms_allowin) begin
++    ms_valid <= es2ms_valid;
++  end
++ 
++  if(es2ms_valid && ms_allowin)begin
++    ms_pc <= es_pc;
++    mem_alu_op<=es_alu_op;
++    mem_alu_result <= alu_result;
++    mem_res_from_mem <= exe_res_from_mem;
++    mem_dest <= exe_dest;
++    mem_gr_we <= exe_gr_we;
++    res_from_mul_reg <= exe_res_from_mul;
++  end
++end
++
++
++assign mem_rf_we = ms_valid && mem_gr_we;
++
++assign mem_result = data_sram_rdata;
++assign mem_mul_result =   ({32{mem_alu_op[12]           }} & mul_result[31:0])
++                    | ({32{mem_alu_op[13]|mem_alu_op[14]}} & mul_result[63:32]);
++assign final_result = mem_res_from_mem ? mem_result : 
++                      res_from_mul_reg?  mem_mul_result :
++                                         mem_alu_result ;
++                      
++
++endmodule
+diff --git a/alu.v b/alu.v
+index 937c4d8..c5f8837 100644
+--- a/alu.v
++++ b/alu.v
+@@ -64,9 +64,6 @@ wire [63:0] sr64_result;
+ wire [31:0] sr_result;
+ //wire [67:0] mul_result;
+ wire [63:0] div_result;
+-wire [63:0] divu_result;
+-
+-
+ 
+ // 32-bit adder
+ wire [31:0] adder_a;
+@@ -108,7 +105,7 @@ assign sr64_result = {{32{op_sra & alu_src1[31]}}, alu_src1[31:0]} >> alu_src2[4
+ assign sr_result   = sr64_result[31:0];
+ 
+ //div
+-
++/*
+ wire div_en;
+ reg  div_data_valid;
+ reg  divu_data_valid;
+@@ -177,6 +174,23 @@ IP_DIV_U divu(
+   .m_axis_dout_tdata      (divu_result),
+   .m_axis_dout_tvalid     (divu_out_valid)
+ );
++*/
++wire signed_div = op_div | op_mod;
++wire unsigned_div = op_divu| op_modu;
++wire div_finish;
++
++wire div_en ;
++assign div_en = op_mod | op_modu | op_div | op_divu;
++DIV u_div(
++    .clk(clk),
++    .resetn(resetn),
++    .div_en(div_en),
++    .div_signed(op_mod | op_div),
++    .divisor(alu_src1),
++    .dividend(alu_src2),
++    .result(div_result),
++    .complete(div_finish)
++);
+ 
+ // final result mux
+ assign alu_result = ({32{op_add|op_sub   }} & add_sub_result)
+@@ -191,10 +205,13 @@ assign alu_result = ({32{op_add|op_sub   }} & add_sub_result)
+                   | ({32{op_srl|op_sra   }} & sr_result)
+                   //| ({32{op_mul          }} & mul_result[31:0])
+                   //| ({32{op_mulh|op_mulhu}} & mul_result[63:32])
+-                  | ({32{op_div          }} & div_result[63:32])
++                 /* | ({32{op_div          }} & div_result[63:32])
+                   | ({32{op_divu         }} & divu_result[63:32])
+                   | ({32{op_mod          }} & div_result[31:0])
+-                  | ({32{op_modu         }} & divu_result[31:0]);
++                  | ({32{op_modu         }} & divu_result[31:0]);*/
++                  | ({32{op_mod|op_modu}} & div_result[31:0])
++                  | ({32{op_div|op_divu}} & div_result[63:32]);
++                  
++   assign alu_flag = ~resetn | div_finish & div_en /*| mul_finish & mul_en*/ | ~div_en /*& ~mul_en*/;
+ 
+-assign alu_flag = ~resetn | div_finish & div_en /*| mul_finish & mul_en*/ | ~div_en /*& ~mul_en*/;
+ endmodule
+\ No newline at end of file
+diff --git a/div.v b/div.v
+index 0b0fd6d..41309f1 100644
+--- a/div.v
++++ b/div.v
+@@ -1,94 +1,76 @@
+ module DIV(
+-    input wire clk,
+-    input wire resetn,
+-    input wire         sign,    //1为有符号，0为无符号
+-    input wire         div_en,
+-    input wire  [31:0] divisor, //
+-    input wire  [31:0] dividend,
++    input  wire    clk,
++    input  wire    resetn,
++    input  wire    div_en,
++    input  wire    sign,
++    input  wire [31:0] divisor,   //������
++    input  wire [31:0] dividend,   //����
+     output wire [63:0] result,
+-    output wire        flag
+-    );
+-
+-    //除数和被除数的绝对值
+-    wire [31:0] X_abs;
+-    wire [31:0] Y_abs;
+-    reg  [5:0]  counter;//计数器，33拍算出结果
+-
+-    wire X_signed=divisor[31]&sign;
+-    wire Y_signed=dividend[31]&sign;
++    output wire    complete //��������ź�
++);
+ 
++    wire [31:0] quotient;
++    wire [31:0] remainder;
+     wire        sign_s;
+     wire        sign_r;
++    wire [31:0] divisor_abs;
++    wire [31:0] dividend_y;
++    wire [32:0] pre_r;
++    wire [32:0] recover_r;
++    reg  [63:0] divisor_pad;
++    reg  [32:0] dividend_pad;
++    reg  [31:0] quotient_reg;
++    reg  [32:0] remainder_reg;    
++    reg  [ 5:0] counter;
+ 
+     assign sign_s = (divisor[31]^dividend[31]) & sign;
+     assign sign_r = divisor[31] & sign;
++    assign divisor_abs  = (sign & divisor[31]) ? (~divisor+1'b1): divisor;
++    assign dividend_y  = (sign & dividend[31]) ? (~dividend+1'b1): dividend;
+ 
+-    wire complete;
+-    assign complete =counter[5]&counter[0]&(~|counter[4:1]);
+-    assign flag=complete;
+-    always @(posedge clk )begin
+-        if(!resetn)begin
+-            counter <= 6'd0;
+-            //flag <= 1'b0;
++    assign complete = counter[5]&counter[0]&|counter[4:1];
++    //��ʼ��������
++    always @(posedge clk) begin
++        if(~resetn) begin
++            counter <= 6'b0;
+         end
+-        else if(div_en)begin
++        else if(div_en) begin
+             if(complete)
+-                counter <= 6'd0;
++                counter <= 6'b0;
+             else
+-                counter <= counter + 6'd1;
++                counter <= counter + 1'b1;
+         end
+     end
+ 
+-    
+-    wire [63:0] result_temp;
+-    wire [32:0] Y_pad;
+-
+-    assign X_abs =(32{X_signed}^divisor) + X_signed;
+-    assign Y_abs =(32{Y_signed}^dividend) + Y_signed;
+-    
+-
+-    //初始化除数和被除数
+-    always @(posedge clk)begin
+-        if(!resetn)begin
+-            {result_temp,Y_pad}<= {64'b0,33'b0};
+-            end
+-        else if(div_en)begin
+-            if(counter==6'b0)begin
+-                {result_temp,Y_pad}<= {32'b0,X_abs,1'b0,Y_abs};
+-                end
+-            end
+-
+-    wire [32:0] pre_remainder;
+-    wire [32:0] cover_remainder;
+-    wire [31:0] sum_remainder;
+-    wire [32:0] current_remainder;
+-
+-    assign pre_remainder   = current_remainder-Y_pad;
+-    assign cover_remainder = pre_remainder[32] ? current_remainder:pre_remainder;//恢复余数法
+-    always @(posedge clk)begin
+-        if(!resetn)begin
+-            sum_remainder <= 32'b0;
+-        end
+-        else if(div_en& ~complete & counter!=6'b0 )begin
+-            sum_remainder[32-counter] <= ~pre_remainder[32];
++    always @(posedge clk) begin
++        if(~resetn)
++            {divisor_pad, dividend_pad} <= {64'b0, 33'b0};
++        else if(div_en) begin
++            if(~|counter)
++                {divisor_pad, dividend_pad} <= {32'b0, divisor_abs, 1'b0, dividend_y};
+         end
+     end
+ 
+-    always @(posedge clk)begin
+-        if(!resetn)begin
+-            current_remainder <= 33'b0;
++    assign pre_r = remainder_reg - dividend_pad;                  
++    assign recover_r = pre_r[32] ? remainder_reg : pre_r;    
++    always @(posedge clk) begin
++        if(~resetn) 
++            quotient_reg <= 32'b0;
++        else if(div_en & ~complete & |counter) begin
++            quotient_reg[32-counter] <= ~pre_r[32];
+         end
+-        if(div_en& ~complete)begin
+-            if(~|counter)begin
+-            current_remainder <= {32'b0,X_abs[31]};
+-            end
+-            else begin
+-            current_remainder <= (&counter[4:0]) ? cover_remainder:{cover_remainder,result_temp[31-counter]};
+-            end
++    end
++    always @(posedge clk) begin
++        if(~resetn)
++            remainder_reg <= 33'b0;
++        if(div_en & ~complete) begin
++            if(~|counter)   //������ʼ��
++                remainder_reg <= {32'b0, divisor_abs[31]};
++            else
++                remainder_reg <=  (~counter[5]&(&counter)) ? recover_r : {recover_r, divisor_pad[31 - counter]};
+         end
+     end
+-
+-    assign result[31:0]= sign & sign_s ? (~result_temp + 1) : result_temp;
+-    assign result[63:32] = sign & sign_r ? (~current_remainder + 1) : current_remainder;
+-endmodule
+-
++    assign quotient = sign & sign_s ? (~quotient_reg+1'b1) : quotient_reg;
++    assign remainder = sign & sign_r ? (~remainder_reg+1'b1) : remainder_reg;
++    assign result ={quotient,remainder};
++endmodule
+\ No newline at end of file
+-- 
+2.39.2.windows.1
+

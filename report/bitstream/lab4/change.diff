@@ -1,0 +1,642 @@
+diff --git a/EXEstage.v b/EXEstage.v
+index c40f28e..440bad6 100644
+--- a/EXEstage.v
++++ b/EXEstage.v
+@@ -18,29 +18,28 @@
+ // Additional Comments:
+ // 
+ //////////////////////////////////////////////////////////////////////////////////
++`include "BUS_LEN.vh"
+ module EXEstage(
+     input clk,
+     input resetn,
+     // id and exe state interface
+     output wire        EXE_allowin,
+     input wire  [31:0] ID_inst,
+-    input  wire [5 :0] ID_reg_control, // {id_rf_we, id_rf_waddr}
+-    input  wire        EXEReg_valid,
+-    input  wire [31:0] ID_pc,    
+-    input  wire [75:0] ID_alu_control, // {alu_op,alu_src1,alu_src2}
+-    input  wire        ID_res_from_mem, 
+-    input  wire        ID_mem_we,
+-    input  wire [31:0] ID_rkd_value,
++    
++    input  wire                     EXEReg_valid,
++    output wire [`EXEReg_LEN -1:0]  EXEReg_bus,
++    
+     // exe and mem state interface
+     input  wire        MEM_allowin,
+     output wire [31:0] EXE_inst,
+-    output reg  [5 :0] EXE_reg_control, // {exe_rf_we, exe_rf_waddr}
++    output wire [38 :0] EXE_reg_control, // {exe_rf_we, exe_rf_waddr}
+     output wire        MEMReg_valid,
+-    output reg  [31:0] EXE_pc,    
+-    output wire [31:0] EXE_alu_result, 
+-    output reg         EXE_res_from_mem, 
+-    output reg         EXE_mem_we,
+-    output reg  [31:0] EXE_rkd_value
++    output reg  [31:0] EXE_pc,
++  
++    output wire        data_sram_en,
++    output wire [ 3:0] data_sram_we,
++    output wire [31:0] data_sram_addr,
++    output wire [31:0] data_sram_wdata
+     );
+     wire        EXE_readygo;
+  
+@@ -51,6 +50,13 @@ module EXEstage(
+     reg  [11:0] alu_op;
+     reg  [31:0] alu_src1;
+     reg  [31:0] alu_src2;
++    wire [31:0] EXE_alu_result ; 
++    reg  [31:0] rkd_value  ;
++    reg         res_from_mem;
++    reg         mem_we     ;
++    reg         rf_we      ;
++    reg  [4 :0] rf_waddr   ;
++    wire [31:0] mem_result ;
+ 
+     always @(posedge clk) begin
+         if(EXEReg_valid & EXE_allowin) begin
+@@ -61,26 +67,22 @@ module EXEstage(
+ 
+ 
+     assign EXE_readygo   = 1'b1;
+-    assign EXE_allowin   = EXE_readygo & MEM_allowin;     
++    assign EXE_allowin   = ~EXE_valid|EXE_readygo & MEM_allowin;     
+     assign MEMReg_valid  = EXE_valid & EXE_readygo;
+     always @(posedge clk) begin
+         if(~resetn)
+             EXE_valid <= 1'b0;
+-        else
+-            EXE_valid <= EXEReg_valid & EXE_allowin; 
++        else if(EXE_allowin)
++            EXE_valid <= EXEReg_valid; 
+     end
+ 
+-    always @(posedge clk) begin
+-        if(EXEReg_valid & EXE_allowin)
+-            EXE_pc <= ID_pc;
+-    end
+-    always @(posedge clk) begin
+-        if(EXEReg_valid & EXE_allowin)
+-            {alu_op, alu_src1, alu_src2} <= ID_alu_control;
+-    end
+-    always @(posedge clk) begin
+-        if(EXEReg_valid & EXE_allowin)
+-            {EXE_res_from_mem, EXE_mem_we, EXE_rkd_value, EXE_reg_control} <= {ID_res_from_mem, ID_mem_we, ID_rkd_value, ID_reg_control};
++   always @(posedge clk) begin
++        if(~resetn)
++            {alu_op, res_from_mem, alu_src1, alu_src2,
++             mem_we, rf_we, rf_waddr, rkd_value, EXE_pc} <= {`EXEReg_LEN{1'b0}};
++        else if(EXEReg_valid & EXE_allowin)
++            {alu_op, res_from_mem, alu_src1, alu_src2,
++             mem_we, rf_we, rf_waddr, rkd_value, EXE_pc} <= EXEReg_bus;    
+     end
+         
+     alu u_alu(
+@@ -89,5 +91,10 @@ module EXEstage(
+         .alu_src2   (alu_src2  ),
+         .alu_result (EXE_alu_result)
+     );
++    assign data_sram_en     = (res_from_mem || mem_we) && EXE_valid;
++    assign data_sram_we     = {4{mem_we & EXE_valid}};
++    assign data_sram_addr   = EXE_alu_result;
++    assign data_sram_wdata  = rkd_value;
++    assign EXE_reg_control  = {res_from_mem & EXE_valid, rf_we & EXE_valid, rf_waddr, EXE_alu_result};
+     
+ endmodule
+diff --git a/IDstage.v b/IDstage.v
+index 039b5dd..fb09107 100644
+--- a/IDstage.v
++++ b/IDstage.v
+@@ -18,40 +18,36 @@
+ // Additional Comments:
+ // 
+ //////////////////////////////////////////////////////////////////////////////////
+-
+-
++`include "BUS_LEN.vh"
+ module IDstage(
+     input  wire        clk,
+     input  wire        resetn,
+     //The singnal come from IFstage
+-    output wire        ID_allowin,
+-    output wire        br_taken,
+-    output wire [31:0] br_target,
+-    input  wire        IDReg_valid,
+-    input  wire [31:0] IF_inst,
+-    input  wire [31:0] IF_pc,
++    output wire                         ID_allowin,
++    output wire [32:0]                  br_control,
++    input  wire [`IDReg_LEN-1:0]        IDReg_bus,
++    input  wire                         IDReg_valid,
+     //The control singnal transformed to EXEstage
+-    input  wire        EXE_allowin,
+-    output wire [5 :0] ID_reg_control, // {id_rf_we, id_rf_waddr}
+-    output wire        EXEReg_valid,
+-    output reg  [31:0] ID_pc,    
+-    output wire [75:0] ID_alu_control, // {alu_op, alu_src1, alu_src2}12+64
+-    output wire        ID_res_from_mem, // res_from_mem
+-    output wire        ID_mem_we,
+-    output wire [31:0] ID_rkd_value,
+-    output wire [31:0] ID_inst,
++    input  wire                 EXE_allowin,
++    output wire                 EXEReg_valid,
++    output wire[`EXEReg_LEN-1:0]EXEReg_bus,
+     
++    input  wire [37:0] MEM_reg_control,
++    input  wire [38:0] EXE_reg_control,
+     input  wire [37:0] WB_reg_control //write back in ID stage 
+     );
+     
+     wire        ID_readygo;
+     reg         ID_valid;
+     reg  [31:0] inst;
++    reg  [31:0] ID_pc;
+     
+     wire [11:0] alu_op;
+     wire        src1_is_pc;
+     wire        src2_is_imm;
+     wire        res_from_mem;
++    
++    
+     wire        dst_is_r1;
+     wire        gr_we;
+     wire        mem_we;
+@@ -108,6 +104,9 @@ module IDstage(
+     wire        need_si26;
+     wire        src2_is_4;
+     
++    wire        br_taken;
++    wire [31:0] br_target;
++    
+     wire [ 4:0] rf_raddr1;
+     wire [31:0] rf_rdata1;
+     wire [ 4:0] rf_raddr2;
+@@ -115,33 +114,51 @@ module IDstage(
+     
+     wire [31:0] alu_src1   ;
+     wire [31:0] alu_src2   ;
+-    
++     
++    wire        conflict_r1_wb;
++    wire        conflict_r2_wb;
++    wire        conflict_r1_mem;
++    wire        conflict_r2_mem;
++    wire        conflict_r1_exe;
++    wire        conflict_r2_exe;
++    wire        need_r1;
++    wire        need_r2;
++
+     wire        WB_rf_we   ;
+     wire [ 4:0] WB_rf_waddr;
+     wire [31:0] WB_rf_wdata;
++    wire        MEM_rf_we   ;
++    wire [ 4:0] MEM_rf_waddr;
++    wire [31:0] MEM_rf_wdata;
++    wire        EXE_rf_we   ;
++    wire [ 4:0] EXE_rf_waddr;
++    wire [31:0] EXE_rf_wdata;
++    wire        EXE_res_from_mem;
++
+     wire        ID_rf_we   ;
+     wire [ 4:0] ID_rf_waddr;
+     
++    wire        ID_hold;
+     
+-    assign ID_readygo    = 1'b1;
+-    assign ID_allowin    = !ID_valid|ID_readygo & EXE_allowin;     
++    assign ID_readygo    = ~ID_hold;
++    assign ID_hold       = EXE_res_from_mem & (conflict_r1_exe & need_r1|conflict_r2_exe & need_r2);
++    assign ID_allowin    = ~ID_valid|ID_readygo & EXE_allowin;     
+     assign EXEReg_valid  = ID_valid & ID_readygo;
+     always @(posedge clk) begin
+         if(~resetn)
+             ID_valid <= 1'b0;
+-        else
+-            ID_valid <= IDReg_valid & ~br_taken & ID_allowin; 
++        else if(br_taken)
++            ID_valid <= 1'b0;
++        else if(ID_allowin)
++            ID_valid <= IDReg_valid; 
+     end
+     
+     
+-    always @(posedge clk) begin
+-        if(IDReg_valid & ID_allowin) begin
+-            ID_pc <= IF_pc;
+-        end
+-    end
+-    always @(posedge clk) begin
++   always @(posedge clk) begin
++        if(~resetn)
++            {inst, ID_pc} <= 64'b0;
+         if(IDReg_valid & ID_allowin) begin
+-            inst  <= IF_inst;
++            {inst, ID_pc} <= IDReg_bus;
+         end
+     end
+     assign ID_inst=inst;
+@@ -234,7 +251,7 @@ module IDstage(
+    
+     assign res_from_mem  = inst_ld_w;
+     assign dst_is_r1     = inst_bl;
+-    assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b; 
++    assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b&ID_valid; 
+     assign mem_we        = inst_st_w ;   
+     assign dest          = dst_is_r1 ? 5'd1 : rd;
+     
+@@ -245,6 +262,8 @@ module IDstage(
+     assign ID_rf_waddr = dest; 
+     assign ID_reg_control  = {ID_rf_we, ID_rf_waddr};
+     assign {WB_rf_we, WB_rf_waddr, WB_rf_wdata} = WB_reg_control;
++    assign {MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata} = MEM_reg_control;
++    assign {EXE_res_from_mem, EXE_rf_we, EXE_rf_waddr, EXE_rf_wdata} = EXE_reg_control;
+     
+      regfile u_regfile(
+     .clk    (clk      ),
+@@ -256,15 +275,33 @@ module IDstage(
+     .waddr  (WB_rf_waddr ),
+     .wdata  (WB_rf_wdata )
+     ); 
+-     
+-    assign rj_value  = rf_rdata1;
+-    assign rkd_value = rf_rdata2;
+ 
+-    assign ID_alu_control = {alu_op, alu_src1, alu_src2};
+-    assign ID_mem_we = mem_we;
+-    assign ID_rkd_value = rkd_value;
+-    assign ID_res_from_mem = res_from_mem;
++    assign conflict_r1_wb = (|rf_raddr1) & (rf_raddr1 == WB_rf_waddr) & WB_rf_we;
++    assign conflict_r2_wb = (|rf_raddr2) & (rf_raddr2 == WB_rf_waddr) & WB_rf_we;
++    assign conflict_r1_mem = (|rf_raddr1) & (rf_raddr1 == MEM_rf_waddr) & MEM_rf_we;
++    assign conflict_r2_mem = (|rf_raddr2) & (rf_raddr2 == MEM_rf_waddr) & MEM_rf_we;
++    assign conflict_r1_exe = (|rf_raddr1) & (rf_raddr1 == EXE_rf_waddr) & EXE_rf_we;
++    assign conflict_r2_exe = (|rf_raddr2) & (rf_raddr2 == EXE_rf_waddr) & EXE_rf_we;
++    assign need_r1         = ~src1_is_pc & (|alu_op);
++    assign need_r2         = ~src2_is_imm & (|alu_op);
+     
++    assign rj_value  =  conflict_r1_exe ? EXE_rf_wdata:
++                        conflict_r1_mem ? MEM_rf_wdata:
++                        conflict_r1_wb  ? WB_rf_wdata : rf_rdata1; 
++    assign rkd_value =  conflict_r2_exe ? EXE_rf_wdata:
++                        conflict_r2_mem ? MEM_rf_wdata:
++                        conflict_r2_wb  ? WB_rf_wdata : rf_rdata2; 
++
++    assign EXEReg_bus = {alu_op,          
++                        res_from_mem,    
++                        alu_src1,        
++                        alu_src2,        
++                        mem_we,          
++                        ID_rf_we,           
++                        ID_rf_waddr,       
++                        rkd_value,       
++                        ID_pc               
++                        };
+     assign rj_eq_rd = (rj_value == rkd_value);
+     assign br_taken = (inst_beq  &&  rj_eq_rd
+                     || inst_bne  && !rj_eq_rd
+@@ -274,6 +311,7 @@ module IDstage(
+                     ) && ID_valid;
+     assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (ID_pc + br_offs) :
+                                                     /*inst_jirl*/ (rj_value + jirl_offs);
++    assign br_control={br_taken,br_target};
+                                                     
+     assign alu_src1 = src1_is_pc  ? ID_pc[31:0] : rj_value;
+     assign alu_src2 = src2_is_imm ? imm : rkd_value;
+diff --git a/IFstage.v b/IFstage.v
+index 8f77b0f..085a1ea 100644
+--- a/IFstage.v
++++ b/IFstage.v
+@@ -31,18 +31,25 @@ module IFstage(
+     input  wire [31:0]  inst_sram_rdata,
+     //IFstage->IDstage interface
+     input  wire         ID_allowin,
+-    input  wire         br_taken,
+-    input  wire [31:0]  br_target,
+-    output wire         IDReg_valid,
++    input  wire [32:0]   br_control,
+     //Transform the data to next stage
+-    output wire [31:0]  IF_inst,
+-    output reg  [31:0]  IF_pc
++    output wire         IDReg_valid,
++    output wire [`IDReg_LEN-1:0]  IDReg_bus
+     );
++    wire                IF_allowin; 
+     wire                IF_readygo;
+     reg                 IF_valid;
+     wire        [31:0]  seq_pc;
+     wire        [31:0]  nextpc;
+     
++    wire                          br_taken;
++    wire [31:0]                   br_target;
++    assign {br_taken,br_target} =  br_control;
++    
++    wire [31:0]                IF_inst;
++    reg  [31:0]                IF_pc;
++    assign IDReg_bus        = {IF_inst,IF_pc};
++    
+     assign inst_sram_en     = IF_allowin & resetn;
+     assign inst_sram_we     = 4'b0;
+     assign inst_sram_addr   = nextpc;
+@@ -50,16 +57,22 @@ module IFstage(
+     
+     assign IF_readygo      = 1'b1;//always set 1b'1
+     
+-    assign IF_allowin    =  IF_readygo & ID_allowin;//restern or the normal case     
++    assign IF_allowin    =  ~IF_valid|IF_readygo & ID_allowin;//restern or the normal case     
+     assign IDReg_valid   =  IF_valid & IF_readygo;//the data is valid to ID! 
+     
++    wire  to_IF_valid;
++    assign to_IF_valid=resetn;
+     always @(posedge clk) begin
+-        IF_valid <= resetn; 
++        if(~resetn)
++            IF_valid <= 1'b0;
++        else if(IF_allowin)
++            IF_valid<=to_IF_valid;
+     end
+     
+     assign seq_pc           = IF_pc + 3'h4;  
+     assign nextpc           = br_taken ? br_target : seq_pc;
+ 
++    
+     always @(posedge clk) begin
+         if(~resetn)
+             IF_pc <= 32'h1BFF_FFFC;
+diff --git a/MEMstage.v b/MEMstage.v
+index 09ca0ea..0a82ec6 100644
+--- a/MEMstage.v
++++ b/MEMstage.v
+@@ -18,28 +18,18 @@
+ // Additional Comments:
+ // 
+ //////////////////////////////////////////////////////////////////////////////////
+-
+-
+ module MEMstage(
+     input  wire        clk,
+     input  wire        resetn,
+     
+-    // data sram interface
+-    output wire        data_sram_en,
+-    output wire [ 3:0] data_sram_we,
+-    output wire [31:0] data_sram_addr,
+-    output wire [31:0] data_sram_wdata,
+-    input  wire [31:0] data_sram_rdata,
++    input  wire [31:0] data_sram_rdata, 
++    
+     // exe and mem state interface
+     output wire        MEM_allowin,
+     input  wire [31:0] EXE_inst,
+-    input  wire [5 :0] EXE_reg_control, // {exe_rf_we, exe_rf_waddr}
++    input  wire [38 :0] EXE_reg_control, // {exe_rf_we, exe_rf_waddr}
+     input  wire        MEMReg_valid,
+     input  wire [31:0] EXE_pc,    
+-    input  wire [31:0] EXE_alu_result, 
+-    input  wire        EXE_res_from_mem, 
+-    input  wire        EXE_mem_we,
+-    input  wire [31:0] EXE_rkd_value,
+     // mem and wb state interface
+     input  wire        WB_allowin,
+     output wire [31:0] MEM_inst,  
+@@ -67,10 +57,10 @@ module MEMstage(
+     assign MEM_inst=inst;
+     
+     assign MEM_readygo      = 1'b1;
+-    assign MEM_allowin      =  MEM_readygo & WB_allowin;     
++    assign MEM_allowin      =  ~MEM_valid|MEM_readygo & WB_allowin;     
+     assign WBReg_valid      = MEM_valid & MEM_readygo;
+     assign MEM_rf_wdata     = ms_res_from_mem ? MEM_result : alu_result;
+-    assign MEM_reg_control  = {MEM_rf_we, MEM_rf_waddr, MEM_rf_wdata};
++    assign MEM_reg_control  = {MEM_rf_we&MEM_valid, MEM_rf_waddr, MEM_rf_wdata};
+     
+     always @(posedge clk) begin
+         if(~resetn)
+@@ -79,30 +69,17 @@ module MEMstage(
+             MEM_valid <= MEMReg_valid & MEM_allowin; 
+     end
+ 
+-    always @(posedge clk) begin
+-        if(MEMReg_valid & MEM_allowin)
++  always @(posedge clk) begin
++        if(~resetn) begin
++            MEM_pc <= 32'b0;
++            {ms_res_from_mem, MEM_rf_we, MEM_rf_waddr, alu_result} <= 38'b0;
++        end
++        if(MEMReg_valid & MEM_allowin) begin
+             MEM_pc <= EXE_pc;
+-    end
+-    
+-    always @(posedge clk) begin
+-        if(MEMReg_valid & MEM_allowin)
+-            alu_result <= EXE_alu_result;
+-    end
+-    
+-    always @(posedge clk) begin
+-        if(MEMReg_valid & MEM_allowin)
+-            {MEM_rf_we, MEM_rf_waddr} <= EXE_reg_control;
+-    end
+-    
+-    always @(posedge clk) begin
+-        if(MEMReg_valid & MEM_allowin)
+-            {ms_res_from_mem, MEM_we, rkd_value} <= {EXE_res_from_mem,EXE_mem_we, EXE_rkd_value};
++            {ms_res_from_mem, MEM_rf_we, MEM_rf_waddr, alu_result} <= EXE_reg_control;
++        end
+     end
+     
+     assign MEM_result   = data_sram_rdata;
+-    assign data_sram_en    = EXE_res_from_mem || EXE_mem_we;
+-    assign data_sram_we    = {4{EXE_mem_we}};
+-    assign data_sram_addr  = EXE_alu_result;
+-    assign data_sram_wdata = EXE_rkd_value;
+     
+ endmodule
+diff --git a/WBstage.v b/WBstage.v
+index 3f51eaf..8e5fd16 100644
+--- a/WBstage.v
++++ b/WBstage.v
+@@ -53,24 +53,27 @@ module WBstage(
+     
+ 
+     assign WB_readygo      = 1'b1;
+-    assign WB_allowin       =  WB_readygo ;     
++    assign WB_allowin       = ~WB_valid|WB_readygo ;     
+     always @(posedge clk) begin
+         if(~resetn)
+             WB_valid <= 1'b0;
+-        else
+-            WB_valid <= WBReg_valid & WB_allowin; 
++        else if(WB_allowin)
++            WB_valid <= WBReg_valid; 
+     end
+ 
+     always @(posedge clk) begin
+-        if(WBReg_valid)
++        if(~resetn) begin
++            WB_pc <= 32'b0;
++            {rf_we, rf_waddr, rf_wdata} <= 38'b0;
++        end
++        if(WBReg_valid & WB_allowin) begin
+             WB_pc <= MEM_pc;
+-    end
+-    always @(posedge clk) begin
+-        if(WBReg_valid)
+             {rf_we, rf_waddr, rf_wdata} <= MEM_reg_control;
++        end
+     end
+ 
+-    assign WB_reg_control = {rf_we, rf_waddr, rf_wdata};
++
++    assign WB_reg_control = {rf_we&WB_valid, rf_waddr, rf_wdata};
+ 
+     assign debug_wb_pc = WB_pc;
+     assign debug_wb_rf_wdata = rf_wdata;
+diff --git a/mycpu_top.v b/mycpu_top.v
+index fba0a27..2154d41 100644
+--- a/mycpu_top.v
++++ b/mycpu_top.v
+@@ -1,3 +1,4 @@
++`include "BUS_LEN.vh"
+ module mycpu_top(
+     input  wire        clk,
+     input  wire        resetn,
+@@ -35,8 +36,7 @@ module mycpu_top(
+     wire [31:0] EXE_pc;
+     wire [31:0] MEM_pc;
+     
+-    wire [5 :0] ID_reg_control;
+-    wire [5 :0] EXE_reg_control;
++    wire [38:0] EXE_reg_control;
+     wire [37:0] MEM_reg_control;
+     wire [37:0] WB_reg_control;
+     
+@@ -55,11 +55,11 @@ module mycpu_top(
+     wire [31:0] ID_rkd_value;
+     wire [31:0] EXE_rkd_value;
+ 
+-
+-    wire        br_taken;
+-    wire [31:0] br_target;
+-    wire [75:0] ID_alu_control;
+-    wire [31:0] EXE_alu_result;
++    wire [32:0] br_control;
++    
++    wire [`IDReg_LEN-1:0] IDReg_bus;
++    wire [`EXEReg_LEN-1:0]EXEReg_bus;
++    
+     
+     IFstage U_IFreg(
+         .clk(clk),
+@@ -72,11 +72,9 @@ module mycpu_top(
+         .inst_sram_rdata(inst_sram_rdata),
+         
+         .ID_allowin(ID_allowin),
+-        .br_taken(br_taken),
+-        .br_target(br_target),
++        .br_control(br_control),
+         .IDReg_valid(IDReg_valid),
+-        .IF_inst(IF_inst),
+-        .IF_pc(IF_pc)
++        .IDReg_bus(IDReg_bus)
+     );
+     
+     
+@@ -85,22 +83,16 @@ module mycpu_top(
+         .resetn(resetn),
+ 
+         .ID_allowin(ID_allowin),
+-        .br_taken(br_taken),
+-        .br_target(br_target),
++        .br_control(br_control),
+         .IDReg_valid(IDReg_valid),
+-        .IF_inst(IF_inst),
+-        .IF_pc(IF_pc),
++        .IDReg_bus(IDReg_bus),
+ 
+         .EXE_allowin(EXE_allowin),
+-        .ID_reg_control(ID_reg_control),
+         .EXEReg_valid(EXEReg_valid),
+-        .ID_pc(ID_pc),
+-        .ID_alu_control(ID_alu_control),
+-        .ID_res_from_mem(ID_res_from_mem),
+-        .ID_mem_we(ID_mem_we),
+-        .ID_rkd_value(ID_rkd_value),
+-        .ID_inst(ID_inst),
+-
++        .EXEReg_bus(EXEReg_bus),
++        
++        .MEM_reg_control(MEM_reg_control),       
++        .EXE_reg_control(EXE_reg_control),
+         .WB_reg_control(WB_reg_control)
+     );
+     
+@@ -109,50 +101,44 @@ module mycpu_top(
+         .resetn(resetn),
+         
+         .ID_inst(ID_inst),
++        
+         .EXE_allowin(EXE_allowin),
+-        .ID_reg_control(ID_reg_control),
++        .EXEReg_bus(EXEReg_bus),
+         .EXEReg_valid(EXEReg_valid),
+-        .ID_pc(ID_pc),
+-        .ID_alu_control(ID_alu_control),
+-        .ID_res_from_mem(ID_res_from_mem),
+-        .ID_mem_we(ID_mem_we),
+-        .ID_rkd_value(ID_rkd_value),
+-
++        
+         .MEM_allowin(MEM_allowin),
+         .EXE_inst(EXE_inst),
++        
+         .EXE_reg_control(EXE_reg_control),
+         .MEMReg_valid(MEMReg_valid),
+         .EXE_pc(EXE_pc),
+-        .EXE_alu_result(EXE_alu_result),
+-        .EXE_res_from_mem(EXE_res_from_mem),
+-        .EXE_mem_we(EXE_mem_we),
+-        .EXE_rkd_value(EXE_rkd_value)
++        
++        .data_sram_en(data_sram_en),
++        .data_sram_we(data_sram_we),
++        .data_sram_addr(data_sram_addr),
++        .data_sram_wdata(data_sram_wdata)
++
+     );
+         MEMstage U_MEMReg(
+         .clk(clk),
+         .resetn(resetn),
+ 
+-        .data_sram_en(data_sram_en),
+-        .data_sram_we(data_sram_we),
+-        .data_sram_addr(data_sram_addr),
+-        .data_sram_wdata(data_sram_wdata),
+         .data_sram_rdata(data_sram_rdata),
+ 
+         .MEM_allowin(MEM_allowin),
+         .EXE_inst(EXE_inst),
++        
+         .EXE_reg_control(EXE_reg_control),
+         .MEMReg_valid(MEMReg_valid),
+         .EXE_pc(EXE_pc),
+-        .EXE_alu_result(EXE_alu_result),
+-        .EXE_res_from_mem(EXE_res_from_mem),
+-        .EXE_mem_we(EXE_mem_we),
+-        .EXE_rkd_value(EXE_rkd_value),
+-
++        
+         .WB_allowin(WB_allowin),
+         .MEM_inst(MEM_inst),
+         .MEM_reg_control(MEM_reg_control),
+         .WBReg_valid(WBReg_valid),
+         .MEM_pc(MEM_pc)
++        
++        
+     ) ;
+     WBstage U_WBReg(
+         .clk(clk),
+diff --git a/soc_lite_top.bit b/soc_lite_top.bit
+index e6bd6f3..430b3fc 100644
+Binary files a/soc_lite_top.bit and b/soc_lite_top.bit differ

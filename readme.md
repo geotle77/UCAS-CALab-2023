@@ -1,20 +1,10 @@
 # CALab
 ## Notice
-Please make sure your commit messeage includ your name and change description.
-
-This project is the exp10  of the course of Computer Architecture.
-
-The exp10 is to implement **MUL** module and make it work.
+#TODO:待补充
 
 ## exp10实验流水账
 
 - 2023/10/13 19:00 开始exp10实验，确定分工
-    
-    - 马迪峰负责除法模块和数据通路的设计
-
-    - 饶嘉怡负责乘法模块和数据通路的设计
-
-    - 范子墨负责其余逻辑运算的设计
 
 - 2023/10/14 10:00 完成除法模块的设计和测试
 
@@ -68,10 +58,20 @@ The exp10 is to implement **MUL** module and make it work.
 - 2023/11/19 9:00   调试结束，exp15仿真通过，上板验证通过，exp15结束。
 
 - 2023/11/27 14:00 重新完善代码，上板验证通过。
-## exp15 实验流水账
+
 ## exp17 实验流水账
 - 2023/11/30 18：00 开始撰写exp17部分代码，仿真及上板通过后完成该部分实验
+  
 ## exp18 实验流水账
-
+- 2023/12/09 23：00 exp18仿真及上板通过
+  
 ## exp19 实验流水账
-- 2023/12/10 18:00 开始exp19实验代码，分离pre-IF和IF模块
+- 2023/12/10 18:00 开始exp19实验代码
+  
+- 2023/12/10 23:00 完成exp19代码部分，开始仿真调试
+  
+- 2023/12/11 21:00 调试结束，仿真上板均通过
+  
+- 2023/12/12 19:00重新设计MMU模块，完成exp19-v2
+  
+- 2023/12/12/23:00 exp19仿真上板测试均通过。

@@ -1,0 +1,680 @@
+From 1b990ba492bd3566d469a007c4e071507b4c16fc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E8=91=A1=E8=90=84=E7=B3=96?= <madifeng21@mails.ucas.ac.cn>
+Date: Tue, 21 Nov 2023 15:27:24 +0800
+Subject: [PATCH] exp14 commit
+
+---
+ BUS_LEN.vh  |   4 +-
+ CSR.vh      |   1 -
+ EXEstage.v  |  45 +++++++++++--
+ IDstage.v   |  19 ++++--
+ IFstage.v   | 183 ++++++++++++++++++++++++++++++++++++++++------------
+ MEMstage.v  |  26 +++++---
+ div.v       |   7 +-
+ mycpu_top.v |  82 ++++++++++++++---------
+ 8 files changed, 270 insertions(+), 97 deletions(-)
+
+diff --git a/BUS_LEN.vh b/BUS_LEN.vh
+index 1c186d9..9ac1336 100644
+--- a/BUS_LEN.vh
++++ b/BUS_LEN.vh
+@@ -1,9 +1,9 @@
+ `ifndef BUS_LEN
+ 
+-    `define BR_BUS        33
++    `define BR_BUS        34
+     `define FS2DS_BUS_LEN 97  //fs_exc_data, fs_pc, inst
+     `define DS2ES_BUS_LEN 262 //es_pc, alu_src1, alu_src2, alu_op,load_op,store_op, rkd_value, gr_we, dest, mem_we,ds_exc_data, time_op
+-    `define ES2MS_BUS_LEN 208  //ms_pc, mul_op,mem_gr_we, mem_dest, final_result,es_rl_value, es_exc_date
++    `define ES2MS_BUS_LEN 210  //ms_pc, mul_op,mem_gr_we, mem_dest, final_result,es_rl_value, es_exc_date
+     `define MS2WS_BUS_LEN 199
+     
+     `define FORWARD_BUS_LEN 38
+diff --git a/CSR.vh b/CSR.vh
+index 3a75f36..ffdd98c 100644
+--- a/CSR.vh
++++ b/CSR.vh
+@@ -4,7 +4,6 @@
+     `define EXCEPT_LEN 82
+     `define ALU_OP_LEN 19
+     `define WB_RF_BUS 38
+-    `define BR_BUS 33
+    
+     `define CSR_CRMD   14'h00
+     `define CSR_PRMD   14'h01
+diff --git a/EXEstage.v b/EXEstage.v
+index f0e4f9f..bd17f89 100644
+--- a/EXEstage.v
++++ b/EXEstage.v
+@@ -14,12 +14,16 @@ module EXEstage (
+   output wire [`ES2MS_BUS_LEN-1:0] es2ms_bus,
+   output wire [`FORWARD_BUS_LEN-1:0]   exe_forward_zip,
+   
+-  output wire data_sram_en,
+-  output wire [3:0] data_sram_we,
++  output wire        data_sram_en,
++  output wire        data_sram_wr,
++  output wire [ 3:0] data_sram_we,
++  output wire [ 1:0] data_sram_size,
+   output wire [31:0] data_sram_addr,
+   output wire [31:0] data_sram_wdata,
++  input wire         data_sram_addr_ok,
+ 
+   output reg es_block,
++  output wire es_mem_block,
+   input wire block,
+   
+   output wire [67:0] mul_result,
+@@ -39,6 +43,7 @@ wire [31:0] es_alu_src2;
+ wire [15:0] es_alu_op;
+ wire [2:0]  es_mul_op;
+ wire [31:0] es_rkd_value;
++wire es_mem_we;
+ wire es_gr_we;
+ wire [4:0]  es_dest;
+ wire [`DS_EXC_DATA_WD-1 : 0] ds_exc_data;
+@@ -76,8 +81,9 @@ wire        es_ale         ;
+ wire [ 5:0] ds_ecode       ;
+ wire [ 5:0] es_ecode       ;
+ wire es_res_from_mul        ;
++wire es_res_from_mem        ;
+ assign {es_pc,es_res_from_mul, es_alu_src1, es_alu_src2, es_alu_op, es_mul_op,  es_load_op, es_store_op, es_rkd_value, es_gr_we, es_dest, ds_exc_data,es_time_op} = ds2es_bus_reg;
+-assign es2ms_bus = {es_pc,es_res_from_mul,es_mul_op,es_final_result, es_load_op, es_dest, es_gr_we,es_rkd_value,es_exc_data};
++assign es2ms_bus = {es_mem_we,es_res_from_mem,es_pc,es_res_from_mul,es_mul_op,es_final_result, es_load_op, es_dest, es_gr_we,es_rkd_value,es_exc_data};
+ assign ld_ale  =  es_load_op[1] &es_alu_result[0]                        // inst_ld_h
+                 | es_load_op[2] & (es_alu_result[1] |es_alu_result[0])   // inst_ld_w
+                 | es_load_op[4] & es_alu_result[0] ;                      // inst_ld_hu
+@@ -126,7 +132,8 @@ assign es_exc_data = {es_wrong_addr,
+ //////////pipeline////////
+ wire es_ready_go;
+ 
+-assign es_ready_go = alu_flag;
++assign es_ready_go = es_need_mem ? (es_reflush || es_finish || data_sram_en && data_sram_addr_ok)
++                                    : (es_reflush || alu_flag && es_valid); 
+ assign es_allowin = ~es_valid || es_ready_go && ms_allowin;
+ assign es2ms_valid = es_valid && es_ready_go;
+ 
+@@ -156,6 +163,22 @@ always @(posedge clk)begin
+         end
+     end
+ end
++
++assign es_res_from_mem = |es_load_op & ~ms_ex_to_es & ~es_reflush & ~ld_ale;
++assign es_mem_block = (es_res_from_mem || (es_csr_re | es_csr_we) )& es_valid;
++
++
++//--
++reg es_finish; 
++always @(posedge clk) begin
++    if(reset)
++        es_finish <= 1'b0;
++    else if(data_sram_en & data_sram_addr_ok & ~ms_allowin)
++        es_finish <= 1'b1;
++    else if(ms_allowin)
++        es_finish <= 1'b0;
++    
++end
+ //////////assign//////////
+ 
+ 
+@@ -182,11 +205,19 @@ assign st_strb = {4{es_store_op[0]}} &  st_sel
+ assign st_data = {32{es_store_op[0]}} & {4{es_rkd_value[7:0]}}
+                | {32{es_store_op[1]}} & {2{es_rkd_value[15:0]}}
+                | {32{es_store_op[2]}} & es_rkd_value;
+-assign mem_we=(|es_store_op);
+ 
++wire es_need_mem;
++assign es_need_mem = es_valid && (es_res_from_mem || es_mem_we);
++assign mem_we=(|es_store_op);
++assign es_mem_we = mem_we & ~es_reflush & ~ms_ex_to_es & ~st_ale;
+ assign es_rf_we = es_valid && es_gr_we;
+-assign data_sram_en    =  ((|es_load_op)|mem_we) & es_valid;//1'b1;
+-assign data_sram_we    =  {4{es_valid &  ~es_reflush & ~ms_ex_to_es & ~st_ale}} & mem_we ? st_strb : 4'b0;
++
++assign data_sram_en    =  ~es_finish && es_need_mem;//1'b1;
++assign data_sram_size  = (es_store_op[0] | es_load_op[0] | es_load_op[3]) ? 2'b00   // load b, bu or store b
++                       : (es_store_op[1] | es_load_op[1] | es_load_op[4]) ? 2'b01   // load h, hu or store h
++                       : 2'b10;
++assign data_sram_wr    =  |es_store_op;
++assign data_sram_we    =  es_mem_we ? st_strb : 4'b0000;
+ assign data_sram_addr  =  es_alu_result;
+ assign data_sram_wdata =  st_data;
+ //mul_src
+diff --git a/IDstage.v b/IDstage.v
+index b413238..22a5b79 100644
+--- a/IDstage.v
++++ b/IDstage.v
+@@ -16,8 +16,11 @@ module IDstage (
+   input wire [`FORWARD_BUS_LEN-1:0] exe_forward_zip,
+   input wire [`FORWARD_BUS_LEN-1:0] mem_forward_zip,
+   input wire [`WB_RF_BUS-1:0] rf_zip,
++  
+   input wire es_block,
++  input wire es_mem_block,
+   output wire block,
++  input wire ms_mem_block,
+ 
+   input wire es_csr_re,
+   input wire ms_csr_re,
+@@ -27,9 +30,10 @@ module IDstage (
+ );
+ 
+ //////////zip//////////
++wire br_stall;
+ wire br_taken;
+ wire [31:0] br_target;
+-assign br_zip = {br_taken, br_target};
++assign br_zip = {br_stall, br_taken, br_target};
+ 
+ //forward data from exe,mem,wb
+ wire rf_we;
+@@ -220,8 +224,11 @@ assign mem_conflict_rkd = mem_dest == rf_raddr2 && |rf_raddr2 && (~src2_is_imm &
+ assign ws_conflict_rj  =  rf_waddr == rf_raddr1 && |rf_raddr1 && (~src1_is_pc  & ~inst_lu12i_w & (|alu_op) | (|mul_op) | ds_csr_re | branch);
+ assign ws_conflict_rkd =  rf_waddr == rf_raddr2 && |rf_raddr2 && (~src2_is_imm &                 (|alu_op) | (|mul_op) | ds_csr_re | branch);
+ 
+-assign ds_ready_go    = ~(      exe_rf_we && (es_block | es_csr_re) && (exe_conflict_rj || exe_conflict_rkd)     ||
+-                                mem_rf_we && (ms_csr_re)            && (mem_conflict_rj || mem_conflict_rkd)     ) ||ds_reflush;
++assign es_blk = es_mem_block && (exe_conflict_rj||exe_conflict_rkd);
++assign ms_blk = ms_mem_block && (mem_conflict_rj||mem_conflict_rkd);
++  
++assign ds_ready_go    = ~(      exe_rf_we && (es_block | es_mem_block ) && (exe_conflict_rj || exe_conflict_rkd)     ||
++                                mem_rf_we && (ms_mem_block)            && (mem_conflict_rj || mem_conflict_rkd)     ) ||ds_reflush;
+ 
+ 
+ assign ds_allowin = ~ds_valid || ds_ready_go && es_allowin;
+@@ -432,6 +439,8 @@ assign {cout, cout_test} = {1'b0, rj_value} + {1'b0, ~rkd_value} + 1'b1;
+ assign rj_eq_rd = (rj_value == rkd_value);
+ assign rj_lt_rd = rj_value[31] ^ ~rkd_value[31] ^ cout;
+ assign rj_ltu_rd = ~cout;
++
++assign br_stall = branch && (es_blk || ms_blk);
+ assign br_taken = (   inst_beq  &&  rj_eq_rd
+                    || inst_bne  && !rj_eq_rd
+                    || inst_blt  &&  rj_lt_rd
+@@ -465,8 +474,8 @@ assign ds_ine = ~ ( inst_add_w     | inst_sub_w   | inst_slt     | inst_sltu
+                  inst_st_b      | inst_st_h    | inst_csrrd   | inst_csrwr     |
+                  inst_csrxchg   | inst_ertn    | inst_syscall | inst_break     |
+                  inst_rdcntvl   | inst_rdcntvh | inst_rdcntid );
+-assign ds_csr_re    = inst_csrrd | inst_csrwr | inst_csrxchg |inst_rdcntid;//读使能信�?
+-assign ds_csr_we    = inst_csrwr | inst_csrxchg;//写使能信�?
++assign ds_csr_re    = inst_csrrd | inst_csrwr | inst_csrxchg |inst_rdcntid;//读使能信�??
++assign ds_csr_we    = inst_csrwr | inst_csrxchg;//写使能信�??
+ assign ds_csr_wmask    = {32{inst_csrxchg}} & rj_value | {32{inst_csrwr}};
+ assign csr_wvalue   = rkd_value;
+ assign ds_csr_num   = {14{inst_rdcntid}} & `CSR_TID | {14{~inst_rdcntid}} & ds_inst[23:10];
+diff --git a/IFstage.v b/IFstage.v
+index e39d71e..c41106f 100644
+--- a/IFstage.v
++++ b/IFstage.v
+@@ -3,12 +3,17 @@ module IFstage (
+   input  wire                       clk,
+   input  wire                       resetn,
+   //the interface with the SRAM
+-  output wire                       inst_sram_en,
+-  output wire [3:0]                 inst_sram_we,
+-  output wire [31:0]                inst_sram_addr,
+-  output wire [31:0]                inst_sram_wdata,
+-  input  wire [31:0]                inst_sram_rdata,
+-  //the interface between the IFstage and the IDstage  
++  //Notice:the SRAM can be only read rather than write
++    output wire        inst_sram_en,
++    output wire        inst_sram_wr,
++    output wire [ 3:0] inst_sram_we,
++    output wire [ 1:0] inst_sram_size,
++    output wire [31:0] inst_sram_addr,
++    output wire [31:0] inst_sram_wdata,
++    input  wire [31:0] inst_sram_rdata,
++    input  wire        inst_sram_addr_ok,
++    input  wire        inst_sram_data_ok,
++      //the interface between the IFstage and the IDstage  
+   input  wire [`BR_BUS-1:0]         br_zip,
+   output wire [`FS2DS_BUS_LEN-1:0]  fs2ds_bus,
+   input  wire                       ds_allowin,
+@@ -23,70 +28,164 @@ module IFstage (
+ );
+ 
+ 
+-//////////declaration//////////
+ wire [31:0] seq_pc;
+ wire [31:0] nextpc;
+-reg [31:0] pc;
+ 
++wire br_stall;//
+ wire br_taken;
+ wire [31:0] br_target;
+ 
+-wire [31:0] fs_pc;
+-wire [31:0] inst;
++reg [31: 0] fs_pc;
++reg [31: 0] pfs_pc;
++wire [31:0] fs_inst;
+ 
++wire fs_ready_go; 
++wire fs_allowin; 
++reg fs_valid;
+ //exp13
+ wire        fs_adef;
+ wire [31:0] fs_wrong_addr;
+ wire [`FS_EXC_DATA_WD-1:0] fs_exc_data;
+-//////////zip//////////
+-assign {br_taken, br_target} = br_zip;
+-assign fs2ds_bus = {fs_exc_data,    //95:64
+-                    fs_pc,          //63:32
+-                    inst};          //31:0
+ 
+-//////////pipeline////////
+-wire fs_ready_go; 
+-wire fs_allowin; 
+-reg fs_valid;
++assign {br_stall, br_taken, br_target} = br_zip;
++
++//------------------pre-IF stage------------------
++reg  pfs_valid;
++wire pfs_ready_go;
++wire to_fs_valid;
++always @(posedge clk) begin
++    if (~resetn  ) begin
++        pfs_valid <= 1'b0;
++    end
++    else begin
++        pfs_valid <= 1'b1;
++    end
++end
++
++assign to_fs_valid = pfs_valid && pfs_ready_go;
++assign pfs_ready_go = inst_sram_en && inst_sram_addr_ok;//the addr is accepted then enter IF stage
++
++assign inst_sram_en = fs_allowin & ~br_stall & pfs_valid; // consider the case if pfs_valid :1 but fs_allowin :0
++assign inst_sram_wr = 1'b0;
++assign inst_sram_we  = 4'b0;
++assign inst_sram_size = 2'b10;
++assign inst_sram_wstrb = 4'b0;
++assign inst_sram_wdata = 32'b0;
++assign inst_sram_addr = nextpc;
++
++//////////pre-IF to IF inst buf////////
++reg [31: 0] fs_inst_buf;
++reg         fs_inst_valid;
++reg         fs_inst_cancel;
++always @(posedge clk) begin
++    if(~resetn)
++        fs_inst_cancel <= 1'b0;
++    else if((fs_reflush | br_taken & ~br_stall) && ~fs_allowin && ~fs_ready_go )//the inst is canceled when the branch is taken or the pipeline is flushed
++        fs_inst_cancel <= 1'b1;
++    else if(inst_sram_data_ok) 
++        fs_inst_cancel <= 1'b0;
++end
++
++always @(posedge clk) begin
++    if(~resetn)begin
++        fs_inst_buf <= 32'b0;
++        fs_inst_valid <= 1'b0;
++    end
++    else if(inst_sram_data_ok & ~fs_inst_valid & ~ds_allowin & ~fs_inst_cancel)//this is to get the inst from the sram
++    begin
++        fs_inst_buf <= inst_sram_rdata;
++        fs_inst_valid <= 1'b1;
++    end
++    else if(fs_reflush || ds_allowin) // ds_allowin = 1: inst enters id stage
++    begin
++      fs_inst_buf <= 32'b0;
++      fs_inst_valid <= 1'b0;
++    end
++end
++//------------------IF stage------------------
++
++
+ 
+-assign fs_pc = pc;
+-assign fs_ready_go = 1'b1;
+ assign fs_allowin = ~fs_valid || fs_ready_go && ds_allowin;
+-assign fs2ds_valid = fs_valid && fs_ready_go && ~fs_reflush;
+ 
+ always @(posedge clk) begin
+   if (~resetn) begin
+     fs_valid <= 1'b0;
+   end 
+   else if (fs_allowin) begin
+-    fs_valid <= resetn;
+-  end
+-
+-  if (~resetn) begin
+-    pc <= 32'h1bfffffc; // trick: to make nextpc be 0x1c000000 during reset
+-  end 
+-  else if (resetn & fs_allowin )begin
+-    pc <= nextpc;
++    fs_valid <= to_fs_valid;
+   end
+ end
+ 
+-// adef: address error
+-assign fs_adef = nextpc[1] | nextpc[0];
+-assign fs_wrong_addr = nextpc;
++assign fs_ready_go = fs_valid && inst_sram_data_ok|| fs_inst_valid && ~fs_inst_cancel;
++assign fs_inst     = fs_inst_valid ? fs_inst_buf : inst_sram_rdata;//don't need to wait the data_ok signal
++assign fs2ds_bus = {fs_exc_data,    //95:64
++                    fs_pc,          //63:32
++                    fs_inst};          //31:0
++assign fs2ds_valid = fs_valid && fs_ready_go && ~fs_reflush && ~fs_inst_cancel && ~(br_taken & ~br_stall) ;
++//////////excption information////////
++
++assign fs_adef = fs_pc[1] | fs_pc[0];
++assign fs_wrong_addr = fs_pc;
+ assign fs_exc_data    = {fs_valid & fs_adef, // 32:32
+                          fs_wrong_addr       // 31:0
+                         };
+-
+-//////////assign//////////
+-assign seq_pc = pc + 3'h4;
++reg fs_ertn_valid;//delay ertn_flush
++reg fs_ex_valid;//delay wb_ex
++reg [31: 0]fs_ertn_entry;
++reg [31: 0]fs_ex_entry;
++reg fs_br_taken;
++reg [31: 0] fs_br_target;
++assign seq_pc = pfs_pc + 3'h4;
+ assign nextpc  =  wb_ex? csr_ex_entry:
++                  fs_ex_valid? fs_ex_entry:
++                  fs_ertn_valid? fs_ertn_entry:
+                   ertn_flush? csr_ertn_entry:
+-                  br_taken ? br_target : seq_pc;
++                  fs_br_taken? fs_br_target:
++                  br_taken & ~br_stall ? br_target : seq_pc;
++
++always @(posedge clk) begin
++  if(~resetn||pfs_ready_go && fs_allowin) begin
++    fs_ertn_valid <= 1'b0;
++    fs_ex_valid <= 1'b0;
++    fs_ertn_entry <= 32'b0;
++    fs_ex_entry <= 32'b0;
++  end
++  else if(ertn_flush) begin
++    fs_ertn_valid <= ertn_flush;
++    fs_ertn_entry <= csr_ertn_entry;
++  end
++  else if(wb_ex) begin
++    fs_ex_valid <= wb_ex;
++    fs_ex_entry <= csr_ex_entry;
++  end
++end
++
++always @(posedge clk) begin
++  if(~resetn || pfs_ready_go && fs_allowin) begin
++    fs_br_taken <= 1'b0;
++    fs_br_target <= 32'b0;
++  end
++  else if(br_taken & ~br_stall) begin
++    fs_br_taken <= br_taken;
++    fs_br_target <= br_target;
++  end
++end
++
++always @(posedge clk) begin
++  if(~resetn) begin
++    pfs_pc <= 32'h1bfffffc;
++  end
++  else if(pfs_ready_go & fs_allowin) begin
++    pfs_pc <= nextpc;
++  end
++end
++
++always @(posedge clk) begin
++ if(to_fs_valid & fs_allowin) begin
++    fs_pc <= nextpc;
++  end
++end
+ 
+-assign inst_sram_en = resetn && fs_allowin;
+-assign inst_sram_we = 4'b0;
+-assign inst_sram_addr = nextpc;
+-assign inst_sram_wdata = 32'b0;
+-assign inst = inst_sram_rdata;
+ 
+ endmodule
+diff --git a/MEMstage.v b/MEMstage.v
+index 70842c0..a0b8d0c 100644
+--- a/MEMstage.v
++++ b/MEMstage.v
+@@ -3,7 +3,9 @@ module MEMstage (
+   input wire clk,
+   input wire resetn,
+   input wire reset,
+-  input wire [31:0] data_sram_rdata,
++
++  input  wire [31:0] data_sram_rdata,
++  input  wire data_sram_data_ok,
+   
+   input wire ws_allowin,
+   output wire ms_allowin,
+@@ -17,6 +19,7 @@ module MEMstage (
+   input [67:0] mul_result,
+ 
+   output wire ms_ex_to_es,
++  output wire ms_mem_block,
+   input wire ms_reflush,
+   output wire ms_csr_re
+ );
+@@ -29,11 +32,13 @@ wire [4:0]  mem_dest;
+ wire [4:0]  mem_load_op;
+ wire [2:0]  mem_mul_op;
+ wire mem_gr_we;
++wire mem_we;
++wire mem_res_from_mem;
+ wire [31:0] mem_rkd_value;
+ wire [`ES_EXC_DATA_WD-1 : 0] mem_exc_data;
+ wire mem_res_from_mul;
+ reg[`ES2MS_BUS_LEN-1:0] es2ms_bus_reg;
+-assign {ms_pc,mem_res_from_mul,mem_mul_op, mem_alu_result, mem_load_op, mem_dest, mem_gr_we,mem_rkd_value,mem_exc_data} = es2ms_bus_reg;
++assign {mem_we,mem_res_from_mem,ms_pc,mem_res_from_mul,mem_mul_op, mem_alu_result, mem_load_op, mem_dest, mem_gr_we,mem_rkd_value,mem_exc_data} = es2ms_bus_reg;
+ 
+ wire mem_rf_we;
+ wire [31:0] mem_final_result;
+@@ -42,7 +47,6 @@ assign mem_forward_zip = {mem_rf_we, mem_dest, mem_final_result};
+ assign ms2ws_bus = {ms_pc, mem_gr_we, mem_dest, mem_final_result, mem_rkd_value,mem_exc_data};
+ //////////declaration//////////
+ 
+-wire mem_res_from_mem;
+ wire [31:0]mem_result;
+ wire [31:0]mem_mul_result;
+ 
+@@ -50,11 +54,14 @@ reg ms_valid;
+ 
+ //////////pipeline//////////
+ wire ms_ready_go;
+-
+-assign ms_ready_go = 1'b1;
++wire ms_need_mem;
++assign ms_need_mem = ms_valid && (mem_res_from_mem || mem_we);
++assign ms_ready_go = ms_need_mem && data_sram_data_ok ||  ~ms_need_mem;
+ assign ms_allowin = ~ms_valid || ms_ready_go && ws_allowin;
+-assign ms2ws_valid = ms_valid && ms_ready_go && ~ms_reflush;
++assign ms2ws_valid = ms_valid && ms_ready_go;
+ 
++wire mem_need_mem;
++assign mem_need_mem = ms_valid && (mem_res_from_mem || mem_we);
+ always @(posedge clk) begin
+   if (reset) begin
+     ms_valid <= 1'b0;
+@@ -97,11 +104,11 @@ assign {mem_wrong_addr,
+         mem_ecode,
+         mem_csr_re         
+       } = mem_exc_data;
+-assign ms_to_es_ex = (mem_ertn_flush | mem_ex) & ms_valid;
++assign ms_ex_to_es = (mem_ertn_flush | mem_ex) & ms_valid;
+ 
+ 
+ assign mem_rf_we = ms_valid && mem_gr_we;
+-assign mem_res_from_mem = (|mem_load_op);
++
+ 
+ wire [31:0] ld_data;
+ wire [3:0]  ld_sel;
+@@ -129,4 +136,7 @@ assign mem_mul_result =   ({32{mem_mul_op[0]               }} & mul_result[31: 0
+ assign mem_final_result  = {32{mem_res_from_mem}} & ld_data | 
+                         {32{mem_res_from_mul}} & mem_mul_result |
+                         {32{~mem_res_from_mem &~mem_res_from_mul}}&mem_alu_result ;
++//
++assign ms_mem_block = ( mem_res_from_mem || (mem_csr_re|mem_csr_we)) && ms_valid;     
++
+ endmodule
+diff --git a/div.v b/div.v
+index a765714..eddfe05 100644
+--- a/div.v
++++ b/div.v
+@@ -36,10 +36,13 @@ module DIV(
+         end
+         else if(div_en) begin
+             if(complete)
+-                counter <= 6'b0;
++                counter <= counter;
+             else
+                 counter <= counter + 1'b1;
+-        end
++            end
++        else begin
++                 counter <= 6'b0;            
++            end
+     end
+ 
+     always @(posedge clk) begin
+diff --git a/mycpu_top.v b/mycpu_top.v
+index b5b6641..7be1682 100644
+--- a/mycpu_top.v
++++ b/mycpu_top.v
+@@ -1,24 +1,32 @@
+ `include "BUS_LEN.vh"
+ module mycpu_top (
+-  input  wire        clk,
+-  input  wire        resetn,
+-  // inst sram interface
+-  output wire        inst_sram_en,
+-  output wire [3:0]  inst_sram_we,
+-  output wire [31:0] inst_sram_addr,
+-  output wire [31:0] inst_sram_wdata,
+-  input  wire [31:0] inst_sram_rdata,
+-  // data sram interface
+-  output wire        data_sram_en,
+-  output wire [3:0]  data_sram_we,
+-  output wire [31:0] data_sram_addr,
+-  output wire [31:0] data_sram_wdata,
+-  input  wire [31:0] data_sram_rdata,
+-  // trace debug interface
+-  output wire [31:0] debug_wb_pc,
+-  output wire [3:0]  debug_wb_rf_we,
+-  output wire [4:0]  debug_wb_rf_wnum,
+-  output wire [31:0] debug_wb_rf_wdata
++    input  wire        clk,
++    input  wire        resetn,
++    // inst sram interface
++    output wire        inst_sram_req,
++    output wire        inst_sram_wr,
++    output wire [ 1:0] inst_sram_size,
++    output wire [ 3:0] inst_sram_wstrb,
++    output wire [31:0] inst_sram_addr,
++    output wire [31:0] inst_sram_wdata,
++    input  wire [31:0] inst_sram_rdata,
++    input  wire        inst_sram_addr_ok,
++    input  wire        inst_sram_data_ok,
++    // data sram interface
++    output wire        data_sram_req,
++    output wire        data_sram_wr,
++    output wire [ 3:0] data_sram_wstrb,
++    output wire [ 1:0] data_sram_size,
++    output wire [31:0] data_sram_addr,
++    output wire [31:0] data_sram_wdata,
++    input  wire [31:0] data_sram_rdata,
++    input  wire        data_sram_addr_ok,
++    input  wire        data_sram_data_ok,
++    // trace debug interface
++    output wire [31:0] debug_wb_pc,
++    output wire [ 3:0] debug_wb_rf_we,
++    output wire [ 4:0] debug_wb_rf_wnum,
++    output wire [31:0] debug_wb_rf_wdata
+ );
+ 
+ reg         reset;
+@@ -41,6 +49,8 @@ wire [`BR_BUS-1:0] br_zip;
+ wire [`WB_RF_BUS-1:0] rf_zip;
+ 
+ wire es_block;
++wire es_mem_block;
++wire ms_mem_block;
+ wire block;
+ 
+ wire [`FS2DS_BUS_LEN-1:0]   fs2ds_bus;
+@@ -68,11 +78,15 @@ IFstage my_if (
+   .clk              (clk),
+   .resetn           (resetn),
+   
+-  .inst_sram_en     (inst_sram_en),
+-  .inst_sram_we     (inst_sram_we),
+-  .inst_sram_addr   (inst_sram_addr),
+-  .inst_sram_wdata  (inst_sram_wdata),
+-  .inst_sram_rdata  (inst_sram_rdata),
++  .inst_sram_en     (inst_sram_req    ),
++  .inst_sram_wr     (inst_sram_wr     ),
++  .inst_sram_we     (inst_sram_wstrb  ),
++  .inst_sram_size   (inst_sram_size   ),
++  .inst_sram_addr   (inst_sram_addr   ),
++  .inst_sram_wdata  (inst_sram_wdata  ),
++  .inst_sram_rdata  (inst_sram_rdata  ),
++  .inst_sram_addr_ok(inst_sram_addr_ok),
++  .inst_sram_data_ok(inst_sram_data_ok),
+   
+   .br_zip           (br_zip),
+   .fs2ds_bus        (fs2ds_bus),
+@@ -105,6 +119,8 @@ IDstage my_id (
+   .rf_zip           (rf_zip),
+ 
+   .es_block         (es_block),
++  .es_mem_block     (es_mem_block),
++  .ms_mem_block     (ms_mem_block),
+   .block            (block),
+ 
+   .ms_csr_re        (ms_csr_re),
+@@ -126,14 +142,18 @@ EXEstage my_exe (
+   .ds2es_bus        (ds2es_bus),
+   .es2ms_bus        (es2ms_bus),
+ 
+-  .data_sram_en     (data_sram_en),
+-  .data_sram_we     (data_sram_we),
+-  .data_sram_addr   (data_sram_addr),
+-  .data_sram_wdata  (data_sram_wdata),
++  .data_sram_en     (data_sram_req    ),
++  .data_sram_wr     (data_sram_wr     ),
++  .data_sram_we     (data_sram_wstrb  ),     
++  .data_sram_size   (data_sram_size   ),
++  .data_sram_addr   (data_sram_addr   ),
++  .data_sram_wdata  (data_sram_wdata  ),
++  .data_sram_addr_ok(data_sram_addr_ok),
+ 
+   .exe_forward_zip  (exe_forward_zip),
+ 
+   .es_block         (es_block),
++  .es_mem_block     (es_mem_block),
+   .block            (block),
+ 
+   .mul_result       (mul_result),
+@@ -147,7 +167,9 @@ MEMstage my_mem (
+   .clk              (clk),
+   .resetn           (resetn),
+   .reset            (reset),
+-  .data_sram_rdata  (data_sram_rdata),
++
++  .data_sram_rdata (data_sram_rdata ),
++  .data_sram_data_ok(data_sram_data_ok),
+   
+   .ws_allowin       (ws_allowin),
+   .ms_allowin       (ms_allowin),
+@@ -159,7 +181,7 @@ MEMstage my_mem (
+   .mem_forward_zip  (mem_forward_zip),
+ 
+   .mul_result       (mul_result),
+-
++  .ms_mem_block     (ms_mem_block),
+   .ms_ex_to_es      (ms_ex_to_es),
+   .ms_reflush       (ws_reflush),
+   .ms_csr_re        (ms_csr_re)
+-- 
+2.39.2.windows.1
+
